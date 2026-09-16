@@ -1,0 +1,50 @@
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+.claude/
+
+# ---- Environment / secrets ----
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+!.env.*.example
+
+# ---- Frontend (Next.js / Node) ----
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/out/
+frontend/build/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ---- Backend (Python / Django, once implemented) ----
+backend/venv/
+backend/.venv/
+backend/env/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/staticfiles/
+backend/media/
+backend/db.sqlite3
+backend/*.log
+
+# ---- General build artifacts ----
+dist/
+build/
+*.log
+coverage/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
