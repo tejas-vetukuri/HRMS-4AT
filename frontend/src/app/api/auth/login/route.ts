@@ -1,10 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BACKEND_API_URL } from '@/lib/api/backend';
 import { setAuthCookies } from '@/lib/api/proxy';
+import { MOCK_AUTH_ENABLED, MOCK_ACCESS_TOKEN, MOCK_REFRESH_TOKEN, MOCK_USER } from '@/lib/api/mock-auth';
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
+
+    if (MOCK_AUTH_ENABLED) {
+      const resp = NextResponse.json({
+        success: true,
+        data: {
+          user: {
+            id: MOCK_USER.id,
+            email: email || MOCK_USER.email,
+            firstName: MOCK_USER.firstName,
+            lastName: MOCK_USER.lastName,
+            role: 'employee',
+            permissions: [],
+          },
+        },
+      });
+      setAuthCookies(resp, MOCK_ACCESS_TOKEN, MOCK_REFRESH_TOKEN);
+      return resp;
+    }
 
     const response = await fetch(`${BACKEND_API_URL}/auth/login`, {
       method: 'POST',

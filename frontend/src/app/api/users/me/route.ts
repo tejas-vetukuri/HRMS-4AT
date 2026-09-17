@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyToBackend, setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
+import { MOCK_AUTH_ENABLED, MOCK_USER } from '@/lib/api/mock-auth';
 
 export async function PATCH(req: NextRequest) {
   try {
     const payload = await req.json();
+
+    if (MOCK_AUTH_ENABLED) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: MOCK_USER.id,
+          email: MOCK_USER.email,
+          firstName: payload.firstName ?? MOCK_USER.firstName,
+          lastName: payload.lastName ?? MOCK_USER.lastName,
+        },
+      });
+    }
 
     const { status, body, rotated, sessionExpired } = await proxyToBackend(
       req,

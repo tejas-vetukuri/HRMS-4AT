@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BACKEND_API_URL } from '@/lib/api/backend';
 import { setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
+import { MOCK_AUTH_ENABLED, MOCK_ACCESS_TOKEN, MOCK_REFRESH_TOKEN } from '@/lib/api/mock-auth';
 
 /**
  * Exchange the refresh cookie for a fresh token pair and re-set both cookies.
@@ -9,6 +10,20 @@ import { setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
  */
 export async function POST(req: NextRequest) {
   const refreshToken = req.cookies.get('refreshToken')?.value;
+
+  if (MOCK_AUTH_ENABLED) {
+    if (refreshToken !== MOCK_REFRESH_TOKEN) {
+      const resp = NextResponse.json(
+        { success: false, error: { message: 'No session' } },
+        { status: 401 }
+      );
+      clearAuthCookies(resp);
+      return resp;
+    }
+    const resp = NextResponse.json({ success: true });
+    setAuthCookies(resp, MOCK_ACCESS_TOKEN, MOCK_REFRESH_TOKEN);
+    return resp;
+  }
 
   if (!refreshToken) {
     const resp = NextResponse.json(
