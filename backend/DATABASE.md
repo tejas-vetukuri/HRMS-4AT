@@ -11,9 +11,10 @@ framework internals and are left out of the diagram).
 
 | Table | What it holds |
 |---|---|
-| `employees_employee` | One row per person. `manager_id` points at another employee (the reporting line). Links to department, designation, location, legal entity, and to the person's login (`user_id`). `status` is `active`, `on_leave` or `exited`. |
+| `employees_employee` | One row per person. `manager_id` points at another employee (the reporting line). Links to department, designation, location, legal entity, and to the person's login (`user_id`). `status` is `active`, `on_leave` or `exited`. Also holds employment type, joining and exit dates, and personal details (personal email, phone, date of birth, gender), which are readable only with their own permissions. |
 | `employees_department` | Departments; `parent_id` gives the two-level hierarchy. |
 | `employees_designation`, `employees_location`, `employees_legalentity` | Job titles, locations, legal entities (one entity today). |
+| `employees_businessunit`, `employees_costcenter` | Business units, and cost centres (with a finance `code`). Each employee can belong to one of each. |
 | `accounts_user` | The login: email, password hash, `is_active`, and the person's single `role_id`. |
 | `accounts_role` | Roles. Admin-created; four starter roles plus custom ones (`archetype` tells the frontend which UI to render; `is_active` off means the role grants nothing). |
 | `accounts_permission` | Permission codes such as `employees.read`. Declared in code by the owning module (`<app>/rbac.py`), never typed in by hand. |
@@ -90,6 +91,21 @@ erDiagram
         JSONField diff
         DateTimeField created_at
     }
+    BusinessUnit {
+        BigAutoField id PK
+        CharField name UK
+        BooleanField is_active
+        DateTimeField created_at
+        DateTimeField updated_at
+    }
+    CostCenter {
+        BigAutoField id PK
+        CharField name UK
+        BooleanField is_active
+        DateTimeField created_at
+        DateTimeField updated_at
+        CharField code
+    }
     Department {
         BigAutoField id PK
         CharField name UK
@@ -113,8 +129,18 @@ erDiagram
         ForeignKey designation_id FK
         ForeignKey location_id FK
         ForeignKey legal_entity_id FK
+        ForeignKey business_unit_id FK
+        ForeignKey cost_center_id FK
         CharField status
+        CharField employment_type
         CharField employee_code UK
+        DateField date_of_joining
+        DateField date_of_exit
+        CharField exit_reason
+        CharField personal_email
+        CharField phone
+        DateField dob
+        CharField gender
         DateTimeField created_at
         DateTimeField updated_at
     }
@@ -154,6 +180,8 @@ erDiagram
     Designation |o--o{ Employee : "designation"
     Location |o--o{ Employee : "location"
     LegalEntity |o--o{ Employee : "legal_entity"
+    BusinessUnit |o--o{ Employee : "business_unit"
+    CostCenter |o--o{ Employee : "cost_center"
     Employee ||--o{ LeaveRequest : "employee"
 ```
 
