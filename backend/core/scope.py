@@ -1,0 +1,197 @@
+"""core/scope.py::resolve_employee_scope — the single most important function in
+the codebase. It is the direct fix for a confirmed, live IDOR vulnerability (any
+employee could previously read any other employee's data by changing an ID in a
+URL). Every employee-keyed queryset in every module must filter through this
+function's result rather than re-implementing any tier's logic locally:
+
+    Employee.objects.filter(pk__in=resolve_employee_scope(user, "leave.approve"))
+
+See docs/ARCHITECTURE.md's "Scope resolution" section for the design this
+implements, and docs/REQUIREMENTS.md §0 for what each tier means in product terms.
+"""
+
+from django.db import connection
+from django.db.models import Q, QuerySet
+
+from accounts.models import RolePermission, UserPermissionOverride
+from core.enums import ScopeTier
+from employees.models import Employee
+
+
+def user_has_permission(user, permission_code: str) -> bool:
+    """Whether `user` holds `permission_code` at all, regardless of scope tier.
+    For capability-style permissions that aren't employee-keyed (e.g.
+    `roles.manage` — "can this user administer roles," not "which employees'
+    roles can they see"). Employee-keyed permissions should still go through
+    resolve_employee_scope() so the caller gets the actual filtered queryset,
+    not just a yes/no."""
+    scope_tier, is_granted = _resolve_effective_scope(user, permission_code)
+    return bool(is_granted and scope_tier is not None)
+
+
+def resolve_employee_scope(user, permission_code: str) -> QuerySet:
+    """Returns the queryset of Employee rows `user` may act on for
+    `permission_code`, resolved from their role's RolePermission (or a
+    UserPermissionOverride on that exact user+permission, which always wins)."""
+    employee = getattr(user, "employee", None)
+    if employee is None:
+        return Employee.objects.none()
+
+    scope_tier, is_granted = _resolve_effective_scope(user, permission_code)
+    if not is_granted or scope_tier is None:
+        return Employee.objects.none()
+
+    return _employees_for_tier(employee, scope_tier)
+
+
+def _resolve_effective_scope(user, permission_code: str):
+    """A UserPermissionOverride on this exact (user, permission) always wins over
+    the role's own grant — whether that means a wider scope, a narrower one, or
+    an explicit denial (is_granted=False).
+
+    Memoized on the `user` instance for the lifetime of the request: DRF's
+    JWTAuthentication loads a fresh User instance per request (it isn't cached
+    across requests), so attaching a plain dict here is request-scoped caching
+    without needing an actual cache backend — the same permission code checked
+    twice in one request (e.g. has_permission then has_object_permission) only
+    hits the DB once."""
+    cache = getattr(user, "_scope_resolution_cache", None)
+    if cache is None:
+        cache = {}
+        user._scope_resolution_cache = cache
+    if permission_code in cache:
+        return cache[permission_code]
+
+    override = (
+        UserPermissionOverride.objects.select_related("permission")
+        .filter(user=user, permission__code=permission_code)
+        .first()
+    )
+    if override is not None:
+        result = (override.scope_tier, override.is_granted)
+        cache[permission_code] = result
+        return result
+
+    if user.role_id is None:
+        result = (None, False)
+        cache[permission_code] = result
+        return result
+
+    role_permission = (
+        RolePermission.objects.select_related("permission")
+        .filter(role_id=user.role_id, permission__code=permission_code)
+        .first()
+    )
+    result = (role_permission.scope_tier, True) if role_permission is not None else (None, False)
+    cache[permission_code] = result
+    return result
+
+
+def user_effective_permissions(user) -> set:
+    """The flat set of permission codes `user` holds at all, regardless of
+    scope tier — role grants plus granted overrides, minus denied overrides.
+    This is what `GET /users/me` reports as `permissions` (docs/IMPLEMENTATION-
+    PLAN.md's contract); it is not scope-filtered because scope only matters
+    once you're asking "on whom," not "can you at all.\" """
+    role_codes = set()
+    if user.role_id is not None:
+        role_codes = set(
+            RolePermission.objects.filter(role_id=user.role_id).values_list(
+                "permission__code", flat=True
+            )
+        )
+
+    overrides = list(UserPermissionOverride.objects.filter(user=user).select_related("permission"))
+    granted = {o.permission.code for o in overrides if o.is_granted}
+    denied = {o.permission.code for o in overrides if not o.is_granted}
+
+    return (role_codes | granted) - denied
+
+
+def resolve_management_scope(user, permission_code: str = "employees.read") -> dict:
+    """Coarse 3-way scope summary for the frontend's ManagementScope contract
+    (frontend/src/lib/auth/auth-context.tsx: {kind:'self'} | {kind:'team',
+    employeeIds} | {kind:'org'}) — the frontend only ever branches on this
+    3-way distinction (see useRequireAccess's requireOrgScope), so our 7 tiers
+    collapse: SELF -> self, ALL -> org, everything in between -> team with the
+    actual resolved employee ids attached."""
+    employee = getattr(user, "employee", None)
+    if employee is None:
+        return {"kind": "self"}
+
+    scope_tier, is_granted = _resolve_effective_scope(user, permission_code)
+    if not is_granted or scope_tier is None or scope_tier == ScopeTier.SELF:
+        return {"kind": "self"}
+    if scope_tier == ScopeTier.ALL:
+        return {"kind": "org"}
+
+    ids = _employees_for_tier(employee, scope_tier).values_list("pk", flat=True)
+    return {"kind": "team", "employeeIds": [str(pk) for pk in ids]}
+
+
+def _employees_for_tier(employee: Employee, scope_tier: str) -> QuerySet:
+    if scope_tier == ScopeTier.SELF:
+        return Employee.objects.filter(pk=employee.pk)
+
+    if scope_tier == ScopeTier.MANAGER:
+        # Direct reports only, no recursion up or down — plus the caller's own
+        # record, since every tier but SELF is inclusive of the caller.
+        return Employee.objects.filter(Q(pk=employee.pk) | Q(manager_id=employee.pk))
+
+    if scope_tier == ScopeTier.TEAM:
+        subtree_ids = _recursive_subtree_ids(employee.pk)
+        subtree_ids.add(employee.pk)
+        return Employee.objects.filter(pk__in=subtree_ids)
+
+    if scope_tier in _SCALAR_ATTRIBUTE_SCOPE_FIELDS:
+        field = _SCALAR_ATTRIBUTE_SCOPE_FIELDS[scope_tier]
+        value = getattr(employee, field)
+        if value is None:
+            return Employee.objects.filter(pk=employee.pk)
+        return Employee.objects.filter(**{field: value})
+
+    if scope_tier == ScopeTier.ALL:
+        return Employee.objects.all()
+
+    return Employee.objects.none()
+
+
+# DEPARTMENT/LOCATION/LEGAL_ENTITY all resolve the same way: filter by a
+# scalar FK on Employee, falling back to self-only if the employee has no
+# value for that FK. A future scalar-attribute tier (e.g. cost center) is a
+# one-line addition here, not a new copy-pasted branch.
+_SCALAR_ATTRIBUTE_SCOPE_FIELDS = {
+    ScopeTier.DEPARTMENT: "department_id",
+    ScopeTier.LOCATION: "location_id",
+    ScopeTier.LEGAL_ENTITY: "legal_entity_id",
+}
+
+
+def _recursive_subtree_ids(root_employee_id) -> set:
+    """Every employee transitively under root_employee_id (direct + indirect
+    reports), via a recursive CTE over the self-referencing manager FK — this is
+    what backs the `team` tier and is the one piece of scope resolution that
+    can't be expressed as a single Django ORM filter.
+
+    Nothing elsewhere validates that Employee.manager assignments stay
+    acyclic, so the CTE tracks the path it has walked and refuses to revisit
+    a node already on it (`NOT e.id = ANY(s.path)`) — without this, a manager
+    cycle in the data (however it got there) would make this query recurse
+    without bound against the authorization path every employee-keyed
+    request in the system depends on."""
+    table = Employee._meta.db_table
+    sql = f"""
+        WITH RECURSIVE subtree AS (
+            SELECT id, manager_id, ARRAY[id] AS path
+            FROM {table} WHERE manager_id = %s
+            UNION ALL
+            SELECT e.id, e.manager_id, s.path || e.id
+            FROM {table} e
+            INNER JOIN subtree s ON e.manager_id = s.id
+            WHERE NOT e.id = ANY(s.path)
+        )
+        SELECT id FROM subtree
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [root_employee_id])
+        return {row[0] for row in cursor.fetchall()}
