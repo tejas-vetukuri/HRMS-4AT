@@ -27,6 +27,13 @@ class EmployeeStatus(models.TextChoices):
     EXITED = "exited", "Exited"
 
 
+class EmploymentType(models.TextChoices):
+    FULL_TIME = "full_time", "Full time"
+    PART_TIME = "part_time", "Part time"
+    CONTRACT = "contract", "Contract"
+    INTERN = "intern", "Intern"
+
+
 class RoleArchetype(models.TextChoices):
     """Which of the frontend's 3 known UI archetypes a role renders as —
     confirmed against the actual frontend source (frontend/src/lib/auth/

@@ -10,7 +10,7 @@ historical Employee records may still reference a since-retired one.
 from django.conf import settings
 from django.db import models
 
-from core.enums import EmployeeStatus
+from core.enums import EmployeeStatus, EmploymentType
 
 
 class SoftDeleteNamedModel(models.Model):
@@ -55,6 +55,16 @@ class LegalEntity(SoftDeleteNamedModel):
     table from day one so a second entity is a data change, not a schema change."""
 
 
+class BusinessUnit(SoftDeleteNamedModel):
+    """A line of business or division that cuts across departments."""
+
+
+class CostCenter(SoftDeleteNamedModel):
+    """A budget line employees are charged to. `code` is the finance code."""
+
+    code = models.CharField(max_length=30, blank=True)
+
+
 class Employee(models.Model):
     """The one model every other module in the system references. `manager` is
     the self-referencing FK the `manager` (direct reports) and `team` (full
@@ -84,10 +94,33 @@ class Employee(models.Model):
     legal_entity = models.ForeignKey(
         LegalEntity, null=True, blank=True, on_delete=models.PROTECT, related_name="employees"
     )
+    business_unit = models.ForeignKey(
+        BusinessUnit, null=True, blank=True, on_delete=models.PROTECT, related_name="employees"
+    )
+    cost_center = models.ForeignKey(
+        CostCenter, null=True, blank=True, on_delete=models.PROTECT, related_name="employees"
+    )
     status = models.CharField(
         max_length=20, choices=EmployeeStatus.choices, default=EmployeeStatus.ACTIVE
     )
+    employment_type = models.CharField(
+        max_length=20, choices=EmploymentType.choices, default=EmploymentType.FULL_TIME
+    )
     employee_code = models.CharField(max_length=50, unique=True)
+
+    # Lifecycle. date_of_exit and exit_reason are set when status becomes
+    # `exited` and cleared if the person returns.
+    date_of_joining = models.DateField(null=True, blank=True)
+    date_of_exit = models.DateField(null=True, blank=True)
+    exit_reason = models.CharField(max_length=200, blank=True)
+
+    # Personal details. Not part of the ordinary directory: readable only with
+    # employees.personal.read, editable by the person themselves (self-service)
+    # or with employees.personal.write.
+    personal_email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
