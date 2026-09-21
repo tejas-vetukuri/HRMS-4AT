@@ -146,7 +146,9 @@ def test_response_shape_matches_frontend_contract(starter_roles, logged_in_clien
     assert row["first_name"] == "Ada"
     assert row["last_name"] == "Lovelace"
     assert row["work_email"] == "ada@example.com"
-    assert set(row.keys()) == {
+    # The fields the frontend pages read must all be present and unchanged. New
+    # org and lifecycle fields are additive, and personal details are never here.
+    frontend_fields = {
         "id",
         "employee_code",
         "first_name",
@@ -158,6 +160,15 @@ def test_response_shape_matches_frontend_contract(starter_roles, logged_in_clien
         "manager_id",
         "status",
     }
+    additive_fields = {
+        "legal_entity_id",
+        "business_unit_id",
+        "cost_center_id",
+        "employment_type",
+        "date_of_joining",
+        "date_of_exit",
+    }
+    assert set(row.keys()) == frontend_fields | additive_fields
 
 
 def test_retrieve_response_shape_matches_frontend_contract(starter_roles, logged_in_client):
