@@ -121,6 +121,7 @@ REST_FRAMEWORK = {
         "djangorestframework_camel_case.parser.CamelCaseFormParser",
         "djangorestframework_camel_case.parser.CamelCaseMultiPartParser",
     ),
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
     "DEFAULT_PAGINATION_CLASS": "core.pagination.ContractPageNumberPagination",
     "PAGE_SIZE": 20,
     # LoginView sets throttle_scope="login" (P1-E1-10) — this is the IP-based
