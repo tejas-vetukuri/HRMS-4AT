@@ -40,6 +40,15 @@ backend/media/
 backend/db.sqlite3
 backend/*.log
 
+# ---- Backend local dev Postgres cluster (backend/pgdev.sh) ----
+backend/.pgdata/
+backend/.pglogs/
+
+# ---- Real employee PII (this repo is public — never commit real names/
+# emails/org data; loader scripts stay tracked, their data inputs never do) ----
+backend/**/management/commands/data/
+backend/**/fixtures/*.real.*
+
 # ---- General build artifacts ----
 dist/
 build/
@@ -48,3 +57,6 @@ coverage/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+#-----Local Work-----
+docs/
