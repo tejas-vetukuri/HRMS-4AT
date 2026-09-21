@@ -19,7 +19,7 @@ export const MOCK_USER = {
   email: 'demo@elevate-hr.local',
   firstName: 'Demo',
   lastName: 'User',
-  roles: [{ name: 'admin' }],
+  roles: [{ name: 'HR Admin', archetype: 'superadmin' }],
   permissions: [
     'employee.read',
     'employee.write',
