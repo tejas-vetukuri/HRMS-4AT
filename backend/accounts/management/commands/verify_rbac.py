@@ -16,43 +16,16 @@ from collections import Counter
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import make_password
 
 from accounts.models import Permission, Role
 from audit.models import AuditLog
+from core.fictional_org import EMAIL_DOMAIN, ORG_CHART, PASSWORD, FictionalOrg
 from core.verification import VerificationCommand
-from employees.models import Department, Employee, LegalEntity, Location
+from employees.models import Employee
 
 User = get_user_model()
 
-PASSWORD = "Verify-Pass-123!"
-EMAIL_DOMAIN = "verify.invalid"
 API = "/api/v1"
-
-# key, first, last, starter role, department, location, legal entity, manager key
-PEOPLE = [
-    ("hana", "Hana", "Hart", "HR Admin", "People", "Austin", "A", None),
-    ("finn", "Finn", "Ford", "Finance", "Finance", "Austin", "A", None),
-    ("dana", "Dana", "Diaz", "Manager", "Engineering", "Austin", "A", None),
-    ("maya", "Maya", "Moss", "Manager", "Engineering", "Austin", "A", "dana"),
-    ("eli", "Eli", "Egan", "Employee", "Engineering", "Hyderabad", "A", "maya"),
-    ("eve", "Eve", "Ames", "Employee", "Engineering", "Austin", "A", "maya"),
-    ("omar", "Omar", "Ortiz", "Manager", "Sales", "Austin", "B", None),
-    ("sam", "Sam", "Shah", "Employee", "Sales", "Hyderabad", "B", "omar"),
-]
-
-ORG_CHART = """\
-   Fictional company used for this run
-   ------------------------------------------------------------------
-   Dana Diaz  (Manager)   Engineering / Austin     / Entity A
-   +-- Maya Moss  (Manager)   Engineering / Austin     / Entity A
-   |   +-- Eli Egan  (Employee)   Engineering / Hyderabad  / Entity A
-   |   +-- Eve Ames  (Employee)   Engineering / Austin     / Entity A
-   Omar Ortiz (Manager)   Sales / Austin            / Entity B
-   +-- Sam Shah  (Employee)   Sales / Hyderabad       / Entity B
-   Hana Hart  (HR Admin)  People / Austin           / Entity A
-   Finn Ford  (Finance)   Finance / Austin          / Entity A
-   ------------------------------------------------------------------"""
 
 
 class Command(VerificationCommand):
@@ -62,45 +35,13 @@ class Command(VerificationCommand):
     # -- setup ------------------------------------------------------------
 
     def _build_org(self):
-        hashed = make_password(PASSWORD)
-        entities = {
-            "A": LegalEntity.objects.get_or_create(name="VFY Entity A")[0],
-            "B": LegalEntity.objects.get_or_create(name="VFY Entity B")[0],
-        }
-        self.people = {}
-        for key, first, last, role_name, dept, location, entity, _manager in PEOPLE:
-            email = f"vfy.{key}@{EMAIL_DOMAIN}"
-            user = User.objects.create(
-                username=email,
-                email=email,
-                first_name=first,
-                last_name=last,
-                password=hashed,
-                role=Role.objects.get(name=role_name),
-            )
-            self.people[key] = Employee.objects.create(
-                user=user,
-                employee_code=f"VFY-{key.upper()}",
-                department=Department.objects.get_or_create(name=f"VFY {dept}")[0],
-                location=Location.objects.get_or_create(name=f"VFY {location}")[0],
-                legal_entity=entities[entity],
-            )
-        for key, *_middle, manager_key in PEOPLE:
-            if manager_key:
-                self.people[key].manager = self.people[manager_key]
-                self.people[key].save(update_fields=["manager"])
-
-        User.objects.create(
-            username=f"vfy.lou@{EMAIL_DOMAIN}",
-            email=f"vfy.lou@{EMAIL_DOMAIN}",
-            password=hashed,
-            role=Role.objects.get(name="Employee"),
-        )
-        self.by_id = {str(e.pk): key for key, e in self.people.items()}
+        self.org = FictionalOrg.build()
+        self.people = self.org.people
+        self.by_id = self.org.by_id
         self.read_permission_id = Permission.objects.get(code="employees.read").pk
 
     def email(self, key):
-        return f"vfy.{key}@{EMAIL_DOMAIN}"
+        return self.org.email(key)
 
     def _names(self, keys):
         return ", ".join(sorted(self.people[k].user.first_name for k in keys)) or "nobody"
@@ -150,7 +91,7 @@ class Command(VerificationCommand):
         )
         self._build_org()
         v.section("Setup")
-        self.stdout.write(ORG_CHART)
+        v.block(ORG_CHART)
 
         self._authentication(v)
         self._starter_roles(v)
@@ -158,6 +99,10 @@ class Command(VerificationCommand):
         self._individual_overrides(v)
         self._admin_surface(v)
         self._sessions_and_deactivation(v)
+        self._directory_writes(v)
+        self._leaving_and_returning(v)
+        self._role_deactivation(v)
+        self._admin_panel(v)
         self._audit(v)
 
     def _authentication(self, v):
@@ -425,8 +370,187 @@ class Command(VerificationCommand):
             "a deactivated user cannot log in again", fresh.login(self.email("sam"), PASSWORD), 401
         )
 
+    def _directory_writes(self, v):
+        v.section("7. Directory writes: who may create and edit employees")
+        eve = v.login("eve", self.email("eve"), PASSWORD)
+        person = {
+            "first_name": "Nia",
+            "last_name": "North",
+            "work_email": f"vfy.nia@{EMAIL_DOMAIN}",
+            "employee_code": "VFY-NIA",
+        }
+        v.expect_status(
+            "Employee cannot create an employee", eve.post(f"{API}/employees/", person), 403
+        )
+        v.expect_status(
+            "Employee cannot edit even their own record",
+            eve.patch(f"{API}/employees/{self.people['eve'].pk}/", {"first_name": "X"}),
+            403,
+        )
+
+        hana = v.login("hana", self.email("hana"), PASSWORD)
+        created = hana.post(
+            f"{API}/employees/",
+            {**person, "role": "HR Admin", "manager_id": self.people["dana"].pk},
+        )
+        v.expect_status("HR Admin creates an employee", created, 201)
+        nia = User.objects.get(email=person["work_email"])
+        v.check(
+            "the new account has no usable password yet (cannot sign in until one is set)",
+            not nia.has_usable_password(),
+        )
+        v.check(
+            "a role named in the request body is ignored (roles are roles.manage only)",
+            nia.role.name == "Employee",
+        )
+
+        dana_id, eli_id = self.people["dana"].pk, self.people["eli"].pk
+        v.expect_status(
+            "a circular reporting line is rejected (Dana under Eli, who is under Dana)",
+            hana.patch(f"{API}/employees/{dana_id}/", {"manager_id": eli_id}),
+            400,
+        )
+        v.expect_status(
+            "an employee cannot be their own manager",
+            hana.patch(f"{API}/employees/{dana_id}/", {"manager_id": dana_id}),
+            400,
+        )
+
+        v.note("--- a narrow editor: Dana holds employees.write for her own team only")
+        self.org.give_permission("dana", "employees.write", "team")
+        dana = v.login("dana", self.email("dana"), PASSWORD)
+        v.expect_status(
+            "she edits a person in her team (Eli)",
+            dana.patch(f"{API}/employees/{eli_id}/", {"first_name": "Elijah"}),
+            200,
+        )
+        v.expect_status(
+            "she cannot edit someone outside her team (Sam)",
+            dana.patch(f"{API}/employees/{self.people['sam'].pk}/", {"first_name": "X"}),
+            403,
+        )
+        v.expect_status(
+            "she cannot point her report at a manager outside her team",
+            dana.patch(f"{API}/employees/{eli_id}/", {"manager_id": self.people["sam"].pk}),
+            403,
+        )
+        v.expect(
+            "the refused edits changed nothing",
+            Employee.objects.get(pk=eli_id).manager_id,
+            self.people["maya"].pk,
+        )
+
+    def _leaving_and_returning(self, v):
+        v.section("8. Leaving and returning: employee status controls access")
+        hana = v.login("hana", self.email("hana"), PASSWORD)
+        eve = v.login("eve", self.email("eve"), PASSWORD)
+        eve_url = f"{API}/employees/{self.people['eve'].pk}/"
+        v.expect_status("Eve is signed in", eve.get(f"{API}/employees/"), 200)
+
+        v.expect_status("HR marks Eve as exited", hana.patch(eve_url, {"status": "exited"}), 200)
+        v.expect_status(
+            "her existing token stops working at once", eve.get(f"{API}/employees/"), 401
+        )
+        v.expect_status(
+            "she cannot sign in again",
+            v.session("eve").login(self.email("eve"), PASSWORD),
+            401,
+        )
+        v.expect_status(
+            "her refresh token is revoked",
+            eve.post(f"{API}/auth/refresh", {"refreshToken": eve.tokens["refresh"]}),
+            401,
+        )
+
+        v.expect_status("HR reactivates her", hana.patch(eve_url, {"status": "active"}), 200)
+        again = v.session("eve")
+        v.expect_status("she can sign in again", again.login(self.email("eve"), PASSWORD), 200)
+        v.note("on_leave does not affect sign-in; only exited does")
+
+    def _role_deactivation(self, v):
+        v.section("9. Deactivating a role removes what the role grants")
+        hana = v.login("hana", self.email("hana"), PASSWORD)
+        role = self.org.give_permission("maya", "employees.read", "all")
+        maya = v.login("maya", self.email("maya"), PASSWORD)
+        _, seen, _others = self._listing(maya)
+        v.check("Maya (custom role, scope: all) sees everyone", seen == set(self.people))
+
+        response = hana.patch(f"{API}/roles/{role.pk}/", {"isActive": False})
+        v.expect_status("HR Admin deactivates the role", response, 200)
+        v.expect_status(
+            "the same login is refused at once: a deactivated role grants nothing",
+            maya.get(f"{API}/employees/"),
+            403,
+        )
+        v.expect_status(
+            "reactivating the role restores access",
+            hana.patch(f"{API}/roles/{role.pk}/", {"isActive": True}),
+            200,
+        )
+        v.expect_status("Maya can read again", maya.get(f"{API}/employees/"), 200)
+
+    def _admin_panel(self, v):
+        v.section("10. Admin panel: activity log, access preview and safeguards")
+        hana = v.login("hana", self.email("hana"), PASSWORD)
+        eve = v.login("eve", self.email("eve"), PASSWORD)
+
+        v.expect_status("Employee cannot read the activity log", eve.get(f"{API}/audit-log/"), 403)
+        log = hana.get(f"{API}/audit-log/?pageSize=5")
+        v.expect_status("HR Admin reads the activity log", log, 200)
+        rows = log.json()["results"]
+        v.check(
+            "entries come newest first and say who did them",
+            len(rows) == 5 and rows[0]["id"] > rows[-1]["id"] and "actorName" in rows[0],
+        )
+        v.expect_status(
+            "the log cannot be altered through the API",
+            hana.delete(f"{API}/audit-log/{rows[0]['id']}/"),
+            405,
+        )
+
+        v.note("--- access preview: what can Dana reach as a Manager?")
+        self.org.give_permission("dana", "employees.read", "manager")
+        dana_user = self.people["dana"].user_id
+        preview = hana.get(f"{API}/users/{dana_user}/access-preview/?permission=employees.read")
+        v.expect_status("HR Admin previews Dana's access", preview, 200)
+        data = preview.json()["data"]
+        names = {p["name"].split()[0] for p in data["people"]}
+        v.check(
+            "it names herself and both direct reports (Maya, and Nia hired earlier in this run)",
+            data["tier"] == "manager"
+            and data["reachCount"] == 3
+            and names == {"Dana", "Maya", "Nia"},
+            f"tier {data['tier']}, reach {data['reachCount']}, {sorted(names)}",
+        )
+        v.expect_status(
+            "an Employee cannot use the preview",
+            eve.get(f"{API}/users/{dana_user}/access-preview/"),
+            403,
+        )
+
+        v.note("--- safeguards")
+        hana_id = self.people["hana"].user_id
+        finance = Role.objects.get(name="Finance").pk
+        v.expect_status(
+            "an admin cannot change their own role (avoids locking everyone out)",
+            hana.patch(f"{API}/users/{hana_id}/", {"role": finance}),
+            403,
+        )
+        v.expect_status(
+            "an admin cannot deactivate themselves",
+            hana.patch(f"{API}/users/{hana_id}/", {"isActive": False}),
+            403,
+        )
+        held = self.org.give_permission("maya", "employees.read", "self")
+        conflict = hana.delete(f"{API}/roles/{held.pk}/")
+        v.expect_status("a role someone still holds cannot be deleted (clear 409)", conflict, 409)
+        v.check(
+            "the message tells the admin what to do instead",
+            "deactivate" in conflict.json()["error"]["message"],
+        )
+
     def _audit(self, v):
-        v.section("7. Audit trail")
+        v.section("11. Audit trail")
         rows = AuditLog.objects.filter(id__gt=self._audit_baseline)
         counts = Counter(rows.values_list("action", flat=True))
         v.note(f"{rows.count()} audit entries written during this run:")
@@ -443,6 +567,11 @@ class Command(VerificationCommand):
             "UserPermissionOverride.created",
             "UserPermissionOverride.updated",
             "UserPermissionOverride.deleted",
+            "Employee.created",
+            "Employee.updated",
+            "Employee.exited",
+            "Employee.reactivated",
+            "Role.updated",
             "User.sessions_revoked",
             "User.active_status_changed",
         ]

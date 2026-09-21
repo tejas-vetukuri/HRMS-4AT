@@ -25,7 +25,10 @@ What the harness guarantees:
 
 import logging
 import time
+import webbrowser
 from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
 from django.core.cache import cache
@@ -122,6 +125,7 @@ class Verifier:
         self.passed = 0
         self.failed = 0
         self.failures = []
+        self.events = []  # everything printed, in order, for the HTML report
         self._ip_counter = 0
 
     # -- output -----------------------------------------------------------
@@ -131,19 +135,28 @@ class Verifier:
         self.command.stdout.flush()
 
     def section(self, title):
+        self.events.append(("section", title))
         self._write()
         self._write(self.style.MIGRATE_HEADING(f"== {title}"))
 
     def note(self, text):
+        self.events.append(("note", text))
         self._write(f"   {text}")
 
+    def block(self, text):
+        """Pre-formatted text (for example an org chart), shown as-is."""
+        self.events.append(("block", text))
+        self._write(text)
+
     def trace(self, who, method, path, status, detail=""):
+        self.events.append(("trace", who, method, path, status, detail))
         suffix = f"  ({detail})" if detail else ""
         self._write(f"     {who:<8} {method:<6} {path}  ->  {status}{suffix}")
 
     # -- checks -----------------------------------------------------------
 
     def check(self, label, ok, detail=""):
+        self.events.append(("check", bool(ok), label, "" if ok else detail))
         if ok:
             self.passed += 1
             self._write(f"   {self.style.SUCCESS('PASS')}  {label}")
@@ -185,8 +198,37 @@ class VerificationCommand(BaseCommand):
 
     title = "Verification"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--html",
+            nargs="?",
+            const="auto",
+            metavar="PATH",
+            help="Also write a self-contained HTML report (default: verification-reports/).",
+        )
+        parser.add_argument(
+            "--open", action="store_true", help="Open the HTML report in the default browser."
+        )
+
     def verify(self, v: Verifier):
         raise NotImplementedError
+
+    def _write_report(self, verifier, options, elapsed):
+        if not (options.get("html") or options.get("open")):
+            return
+        from core.verification_report import render_html
+
+        target = options.get("html")
+        if not target or target == "auto":
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            name = self.__module__.rsplit(".", 1)[-1]
+            target = Path(settings.BASE_DIR) / "verification-reports" / f"{name}-{stamp}.html"
+        target = Path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(render_html(self.title, verifier, elapsed), encoding="utf-8")
+        self.stdout.write(f"HTML report: {target}")
+        if options.get("open"):
+            webbrowser.open(target.resolve().as_uri())
 
     def handle(self, *args, **options):
         if settings.SETTINGS_MODULE.endswith(".prod"):
@@ -217,6 +259,7 @@ class VerificationCommand(BaseCommand):
         elapsed = time.monotonic() - started
         total = verifier.passed + verifier.failed
         self.stdout.write("")
+        self._write_report(verifier, options, elapsed)
         line = (
             f"{verifier.passed}/{total} checks passed in {elapsed:.1f}s. "
             "Database changes rolled back."

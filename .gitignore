@@ -43,6 +43,7 @@ backend/*.log
 # ---- Backend local dev Postgres cluster (backend/pgdev.sh) ----
 backend/.pgdata/
 backend/.pglogs/
+backend/verification-reports/
 
 # ---- Real employee PII (this repo is public — never commit real names/
 # emails/org data; loader scripts stay tracked, their data inputs never do) ----
