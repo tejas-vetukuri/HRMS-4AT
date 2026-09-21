@@ -16,7 +16,7 @@ from accounts.factories import (
     UserPermissionOverrideFactory,
 )
 from core.enums import ScopeTier
-from core.scope import resolve_employee_scope
+from core.scope import resolve_employee_scope, user_effective_permissions, user_has_permission
 from employees.factories import (
     DepartmentFactory,
     EmployeeFactory,
@@ -198,6 +198,45 @@ def test_user_permission_override_can_explicitly_deny():
     result = resolve_employee_scope(user, permission.code)
 
     assert _ids(result) == set()
+
+
+# --- a deactivated role must grant nothing ---
+
+
+def _user_with_role_granting(code, tier=ScopeTier.ALL, role_active=True):
+    permission = PermissionFactory(code=code)
+    role = RoleFactory(is_active=role_active)
+    RolePermissionFactory(role=role, permission=permission, scope_tier=tier)
+    user = UserFactory(role=role)
+    EmployeeFactory(user=user)
+    return user
+
+
+def test_deactivated_role_grants_no_scope_or_capability():
+    user = _user_with_role_granting("salary.read", role_active=False)
+
+    assert _ids(resolve_employee_scope(user, "salary.read")) == set()
+    assert user_has_permission(user, "salary.read") is False
+    assert "salary.read" not in user_effective_permissions(user)
+
+
+def test_active_role_still_grants_as_before():
+    user = _user_with_role_granting("salary.read", role_active=True)
+
+    assert user_has_permission(user, "salary.read") is True
+    assert "salary.read" in user_effective_permissions(user)
+
+
+def test_override_still_grants_when_the_role_is_deactivated():
+    """Deactivating a role removes what the role gave; a per-person grant is
+    a separate decision and stays."""
+    user = _user_with_role_granting("salary.read", role_active=False)
+    permission = PermissionFactory(code="salary.read")
+    UserPermissionOverrideFactory(
+        user=user, permission=permission, scope_tier=ScopeTier.SELF, is_granted=True
+    )
+
+    assert user_has_permission(user, "salary.read") is True
 
 
 # --- code-review fix: manager cycles must not hang the TEAM-tier query ---

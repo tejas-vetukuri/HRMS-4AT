@@ -79,12 +79,44 @@ def _resolve_effective_scope(user, permission_code: str):
 
     role_permission = (
         RolePermission.objects.select_related("permission")
-        .filter(role_id=user.role_id, permission__code=permission_code)
+        .filter(role_id=user.role_id, role__is_active=True, permission__code=permission_code)
         .first()
     )
     result = (role_permission.scope_tier, True) if role_permission is not None else (None, False)
     cache[permission_code] = result
     return result
+
+
+def explain_permission(user, permission_code: str) -> dict:
+    """Why `user` does or does not hold `permission_code`, for diagnostics and
+    the access_matrix command. Reads the same data the resolver does, but never
+    caches, so it reflects the database right now.
+
+    Returns {"granted": bool, "tier": str | None,
+             "source": "override" | "role" | "role (inactive)" | "none"}."""
+    override = (
+        UserPermissionOverride.objects.filter(user=user, permission__code=permission_code)
+        .select_related("permission")
+        .first()
+    )
+    if override is not None:
+        return {
+            "granted": override.is_granted,
+            "tier": override.scope_tier if override.is_granted else None,
+            "source": "override" if override.is_granted else "override (deny)",
+        }
+    if user.role_id is None:
+        return {"granted": False, "tier": None, "source": "none"}
+    grant = (
+        RolePermission.objects.filter(role_id=user.role_id, permission__code=permission_code)
+        .select_related("role")
+        .first()
+    )
+    if grant is None:
+        return {"granted": False, "tier": None, "source": "none"}
+    if not grant.role.is_active:
+        return {"granted": False, "tier": None, "source": "role (inactive)"}
+    return {"granted": True, "tier": grant.scope_tier, "source": "role"}
 
 
 def user_effective_permissions(user) -> set:
@@ -95,8 +127,9 @@ def user_effective_permissions(user) -> set:
     once you're asking "on whom," not "can you at all.\" """
     role_codes = set()
     if user.role_id is not None:
+        # A deactivated role grants nothing (overrides below still apply).
         role_codes = set(
-            RolePermission.objects.filter(role_id=user.role_id).values_list(
+            RolePermission.objects.filter(role_id=user.role_id, role__is_active=True).values_list(
                 "permission__code", flat=True
             )
         )
