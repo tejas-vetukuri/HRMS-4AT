@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createBackendProxyRoute } from '@/lib/api/proxy';
 
 /**
- * Proxy for the access-control admin screens. Only these backend resources are
- * reachable through it; everything else 404s here, so this route can't be used
- * to call arbitrary backend endpoints. The backend enforces the real
- * permission checks (roles.manage / audit.read) on every one of them.
+ * Proxy for the admin screens (access control, employees, organisation
+ * structure). Only these backend resources are reachable through it; everything
+ * else 404s here, so this route can't be used to call arbitrary backend
+ * endpoints. The backend enforces the real permission checks (roles.manage,
+ * audit.read, employees.*, org.manage) on every one of them.
  */
 const ALLOWED_RESOURCES = new Set([
   'roles',
@@ -14,6 +15,16 @@ const ALLOWED_RESOURCES = new Set([
   'users',
   'user-permission-overrides',
   'audit-log',
+  // employee and organisation management
+  'employees',
+  'org',
+  // read-only pickers (anyone with directory access may read these)
+  'departments',
+  'designations',
+  'locations',
+  'legal-entities',
+  'business-units',
+  'cost-centers',
 ]);
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';

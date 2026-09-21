@@ -123,7 +123,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const res = await fetch(`/api/admin/${path}`, {
     method: init.method ?? 'GET',
     credentials: 'include',
@@ -148,7 +148,7 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
   return (body && typeof body === 'object' && 'success' in body && 'data' in body ? body.data : body) as T;
 }
 
-const qs = (params: Record<string, string | number | undefined>) => {
+export const qs = (params: Record<string, string | number | undefined>) => {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '');
   return entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}` : '';
 };
@@ -191,7 +191,14 @@ export const adminApi = {
     request<void>(`user-permission-overrides/${id}/`, { method: 'DELETE' }),
 
   // activity log
-  listAudit: (p: { search?: string; action?: string; page?: number; pageSize?: number }) =>
+  listAudit: (p: {
+    search?: string;
+    action?: string;
+    entity_type?: string;
+    entity_id?: string;
+    page?: number;
+    pageSize?: number;
+  }) =>
     request<Page<AuditEntry>>(`audit-log/${qs(p)}`),
 };
 
