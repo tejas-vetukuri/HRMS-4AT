@@ -15,6 +15,8 @@ anywhere — deliberately separate mechanisms for deliberately separate threats.
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from djangorestframework_camel_case.util import camelize
@@ -27,7 +29,13 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import FailedLoginAttempt
-from accounts.serializers import AuthUserSerializer, LoginSerializer, MeUpdateSerializer
+from accounts.serializers import (
+    AuthUserSerializer,
+    ChangePasswordSerializer,
+    LoginSerializer,
+    MeUpdateSerializer,
+)
+from accounts.services import revoke_all_sessions
 from audit.service import write_audit
 from core.scope import resolve_management_scope, user_effective_permissions
 
@@ -217,3 +225,53 @@ class MeView(APIView):
                 "data": AuthUserSerializer(request.user).data,
             }
         )
+
+
+class ChangePasswordView(APIView):
+    """A signed-in user changes their own password (for example, replacing the
+    temporary one an admin issued). Every existing session is revoked and a
+    fresh token pair is returned, so a stolen refresh token stops working the
+    moment the password changes. Shares the login throttle, since it also
+    checks a password."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _error("VALIDATION_ERROR", "Invalid password payload.", serializer.errors)
+        current = serializer.validated_data["current_password"]
+        new = serializer.validated_data["new_password"]
+        user = request.user
+
+        if not user.check_password(current):
+            return _error(
+                "INVALID_CREDENTIALS",
+                "Current password is incorrect.",
+                {"currentPassword": ["Current password is incorrect."]},
+            )
+        if new == current:
+            return _error(
+                "VALIDATION_ERROR",
+                "The new password must be different.",
+                {"newPassword": ["The new password must be different."]},
+            )
+        try:
+            validate_password(new, user)
+        except DjangoValidationError as exc:
+            return _error(
+                "VALIDATION_ERROR",
+                "The new password is not acceptable.",
+                {"newPassword": list(exc.messages)},
+            )
+
+        with transaction.atomic():
+            user.set_password(new)
+            user.save(update_fields=["password"])
+            revoked = revoke_all_sessions(user)
+            write_audit(
+                user, "user.password_changed", "User", user.pk, {"sessionsRevoked": revoked}
+            )
+        return Response({"success": True, "data": _issue_tokens(user)})

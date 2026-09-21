@@ -26,6 +26,10 @@ class RoleSerializer(serializers.ModelSerializer):
     RoleViewSet is an AuditedModelViewSet)."""
 
     permissions = RolePermissionSerializer(source="role_permissions", many=True, read_only=True)
+    user_count = serializers.SerializerMethodField()
+
+    def get_user_count(self, obj):
+        return obj.users.count()
 
     class Meta:
         model = Role
@@ -34,22 +38,30 @@ class RoleSerializer(serializers.ModelSerializer):
             "name",
             "archetype",
             "is_active",
+            "user_count",
             "permissions",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "permissions", "created_at", "updated_at"]
+        read_only_fields = ["id", "user_count", "permissions", "created_at", "updated_at"]
 
 
 class UserPermissionOverrideSerializer(serializers.ModelSerializer):
     permission_code = serializers.CharField(source="permission.code", read_only=True)
+    user_email = serializers.CharField(source="user.email", read_only=True)
+    user_name = serializers.SerializerMethodField()
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.email
 
     class Meta:
         model = UserPermissionOverride
         fields = [
             "id",
             "user",
+            "user_email",
+            "user_name",
             "permission",
             "permission_code",
             "scope_tier",
@@ -64,6 +76,11 @@ class UserPermissionOverrideSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(trim_whitespace=False, write_only=True)
+    new_password = serializers.CharField(trim_whitespace=False, write_only=True)
 
 
 class AuthUserSerializer(serializers.ModelSerializer):

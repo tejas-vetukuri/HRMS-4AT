@@ -11,8 +11,8 @@ from django.db.models import Q
 from djangorestframework_camel_case.util import camelize
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from accounts.models import Permission, Role, RolePermission, User, UserPermissionOverride
 from accounts.serializers import (
@@ -22,9 +22,13 @@ from accounts.serializers import (
     UserPermissionOverrideSerializer,
     UserSerializer,
 )
+from accounts.services import revoke_all_sessions
 from audit.mixins import AuditedModelViewSet
 from audit.service import write_audit
+from core.exceptions import Conflict
 from core.permissions import HasPermissionCode
+from core.scope import explain_permission, resolve_employee_scope
+from employees.models import Employee
 
 
 class RoleViewSet(AuditedModelViewSet):
@@ -33,6 +37,16 @@ class RoleViewSet(AuditedModelViewSet):
     permission_classes = [HasPermissionCode]
     required_permission = "roles.manage"
     audit_entity_type = "Role"
+
+    def perform_destroy(self, instance):
+        holders = instance.users.count()
+        if holders:
+            who = "person holds" if holders == 1 else "people hold"
+            raise Conflict(
+                f"{holders} {who} the role '{instance.name}'. "
+                "Move them to another role first, or deactivate the role instead of deleting it."
+            )
+        super().perform_destroy(instance)
 
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -131,7 +145,24 @@ class UserViewSet(
             )
         return queryset
 
+    def _refuse_self_lockout(self, serializer):
+        """An administrator may not change their own role or deactivate their own
+        account here: one slip would remove the only person able to fix it. Another
+        administrator does it instead."""
+        instance = serializer.instance
+        if instance.pk != self.request.user.pk:
+            return
+        data = serializer.validated_data
+        changing_role = "role" in data and data["role"] != instance.role
+        deactivating = data.get("is_active") is False
+        if changing_role or deactivating:
+            raise PermissionDenied(
+                "You cannot change your own role or deactivate your own account. "
+                "Ask another administrator."
+            )
+
     def perform_update(self, serializer):
+        self._refuse_self_lockout(serializer)
         before_role = serializer.instance.role
         before_active = serializer.instance.is_active
         serializer.save()
@@ -165,6 +196,47 @@ class UserViewSet(
                 {"before": {"isActive": before_active}, "after": {"isActive": after_active}},
             )
 
+    @action(detail=True, methods=["get"], url_path="access-preview")
+    def access_preview(self, request, pk=None):
+        """What this person can actually reach for one permission, right now:
+        where the access comes from (their role, a personal exception, or
+        nothing), at what level, and exactly which people that covers. Lets an
+        admin check a setting before or after changing it."""
+        user = self.get_object()
+        code = request.query_params.get("permission", "employees.read")
+        if not Permission.objects.filter(code=code).exists():
+            raise ValidationError({"permission": ["Unknown permission."]})
+
+        info = explain_permission(user, code)
+        reach = resolve_employee_scope(user, code) if info["granted"] else Employee.objects.none()
+        count = reach.count()
+        limit = 200
+        people = [
+            {
+                "id": str(e.pk),
+                "name": e.user.get_full_name() or e.user.email,
+                "employeeCode": e.employee_code,
+            }
+            for e in reach.select_related("user").order_by("user__last_name", "user__first_name")[
+                :limit
+            ]
+        ]
+        return Response(
+            {
+                "success": True,
+                "data": {
+                    "permission": code,
+                    "granted": info["granted"],
+                    "tier": info["tier"],
+                    "source": info["source"],
+                    "reachCount": count,
+                    "totalEmployees": Employee.objects.count(),
+                    "people": people,
+                    "truncated": count > limit,
+                },
+            }
+        )
+
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):
         """Sets a fresh random password and returns it once — the caller
@@ -188,11 +260,7 @@ class UserViewSet(
         from MySessionDetailView (accounts/session_views.py), which only ever
         lets a user revoke their own session."""
         user = self.get_object()
-        revoked_count = 0
-        for token in OutstandingToken.objects.filter(user=user):
-            _, created = BlacklistedToken.objects.get_or_create(token=token)
-            if created:
-                revoked_count += 1
+        revoked_count = revoke_all_sessions(user)
 
         write_audit(
             request.user, "User.sessions_revoked", "User", user.pk, {"revokedCount": revoked_count}
