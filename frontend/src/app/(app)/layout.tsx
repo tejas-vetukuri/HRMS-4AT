@@ -27,6 +27,7 @@ import {
   PanelLeftOpenIcon,
   SearchIcon,
   FingerprintIcon,
+  IdCardIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -51,6 +52,8 @@ interface NavItem {
    * team-scoped Admin shouldn't see even though their role otherwise would
    * grant access — see useRequireAccess for the matching route guard. */
   requireOrgScope?: boolean;
+  /** Only show for users holding this backend permission code (e.g. 'roles.manage'). */
+  requirePermission?: string;
   badge?: number;
   children?: { label: string; href: string }[];
 }
@@ -94,6 +97,7 @@ const navItems: NavItem[] = [
     ],
   },
   { id: 'org', label: 'Organization', icon: TeamIcon, href: '/employees', roles: ['superadmin'], requireOrgScope: true },
+  { id: 'admin', label: 'Access control', icon: IdCardIcon, href: '/admin', roles: ['admin', 'employee', 'superadmin'], requirePermission: 'roles.manage' },
   { id: 'engage', label: 'Engage', icon: MessageCircleIcon, href: '/engage', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'apps', label: 'Apps', icon: GridIcon, href: '/apps', roles: ['admin', 'employee', 'superadmin'] },
 ];
@@ -108,6 +112,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
   '/team': { title: 'My Team', subtitle: 'View your team, schedules, and workplace activity' },
   '/employees': { title: 'Organization', subtitle: 'Manage employees and organizational documents' },
+  '/admin': { title: 'Access control', subtitle: 'Manage roles, permissions, people and the activity log' },
   '/org': { title: 'Organisation', subtitle: 'Browse the employee directory and organisation chart' },
   '/settings': { title: 'Settings', subtitle: 'Manage your account preferences' },
   '/help': { title: 'Help & Support', subtitle: 'Find answers to common questions' },
@@ -131,7 +136,7 @@ function getPageTitle(pathname: string) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, isAuthenticated, hasOrgScope } = useAuth();
+  const { user, isLoading, isAuthenticated, hasOrgScope, hasPermission } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -182,7 +187,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (item) =>
       !!user &&
       item.roles.includes(user.role as RequiredRole) &&
-      (!item.requireOrgScope || hasOrgScope()),
+      (!item.requireOrgScope || hasOrgScope()) &&
+      (!item.requirePermission || hasPermission(item.requirePermission)),
   );
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
