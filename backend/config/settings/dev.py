@@ -9,3 +9,6 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 # Local dev only: cookies over plain http don't work with Secure=True.
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Reference plug-in module (see example_leave/). Never installed in production.
+INSTALLED_APPS = [*INSTALLED_APPS, "example_leave"]  # noqa: F405

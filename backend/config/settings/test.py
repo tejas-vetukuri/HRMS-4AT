@@ -9,3 +9,6 @@ DEBUG = False
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",  # fast hashing in tests only
 ]
+
+# Reference plug-in module (see example_leave/). Never installed in production.
+INSTALLED_APPS = [*INSTALLED_APPS, "example_leave"]  # noqa: F405
