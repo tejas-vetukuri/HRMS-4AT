@@ -20,7 +20,7 @@ see the primitives table in [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
   `core/scope.py::user_has_permission(user, permission_code)` — flat yes/no check
   for non-employee-keyed capability permissions (e.g. `roles.manage`).
   `core/permissions.py` — the two DRF permission classes views use to enforce
-  both of the above. Covered by `core/tests/test_scope.py` (13 tests: every
+  both of the above. Covered by `core/tests/test_scope.py` (every
   tier, override precedence, explicit deny).
 
 **API surface** (mounted at `/api/v1/`, camelCase in/out via
@@ -83,49 +83,44 @@ it exists), `POST /users/{id}/revoke-sessions/` (admin force-logout,
 `OutstandingToken`/`BlacklistedToken` — a session is just an issued,
 unexpired, unrevoked refresh token; there's no separate session model.
 
-The RBAC engine — Employee/org model, roles/permissions, scope resolution,
-enforcement, authentication, admin tooling, per-individual overrides, auth
-hardening, audit logging, session management, and role assignment against
-the real employee population — is functionally complete, covered by 103
-automated tests (unit + full API-level 200/403 matrices) running against
-real Postgres — `pytest` in `backend/`. Nothing outside this scope has been
-built: no plugin module (Attendance, Leave, Payroll, ...) exists in the
-codebase yet, by design — see the "seven primitives" note in
-[`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). The one item on this
-list that hasn't happened is independent review: the scope-resolution and
-authentication logic requires sign-off from someone other than its author
-before it's relied on for production access decisions.
+The RBAC engine and employee directory are complete and are the base other modules
+plug into. Employee/org model, roles and permissions, seven scope tiers, per-person
+overrides, enforcement, authentication and hardening, session management, audit
+logging, directory reads **and writes** (create, edit, exit; scoped by
+`employees.write`), password change, and role assignment against the real employee
+population, all covered by 188 automated tests running against real Postgres
+(`pytest` in `backend/`) and by live verification (below).
 
-**Not yet built:** notifications, documents, and every plugin module
-(Attendance, Leave, Payroll, ...). See [`../docs/TASKS.md`](../docs/TASKS.md)
-for the full task breakdown — Phase 0's CI/lint/backup scaffolding hasn't
-landed yet. Also still open: 28 real employees have no manager (27 collapsed in the
-org chart plus the root), no directory write endpoints exist yet, and only the 4
-demo accounts can log in (the 93 real employees have unusable passwords).
+Since the first version, the following also landed: deactivated roles grant nothing;
+write actions on employee-scoped views need their own permission (read can no longer
+authorise create/update/delete); one error shape for the whole API; employee status
+`exited` ends access at once; the permission registry, startup wiring checks, plug-in
+conformance kit and reference module described in [`MODULE-GUIDE.md`](MODULE-GUIDE.md);
+`show_schema`, `access_matrix` and `seed_demo_org` (see [`DATABASE.md`](DATABASE.md)).
+
+**Not built:** notifications, documents, and every real plug-in module (Attendance,
+Leave, Payroll, ...). Independent human review of `core/scope.py` and the auth code is
+still outstanding. Open data items: 28 real employees have no manager, no employee has
+a legal entity assigned, and the 93 real employees have unusable passwords until an
+admin issues a temporary one (`POST /users/{id}/reset-password/`) and they change it
+(`POST /users/me/change-password`).
+
+## Admin panel (Access control)
+
+A section of the existing frontend at `/admin` (sidebar: **Access control**), shown only to people holding `roles.manage`. Four tabs: **Roles & permissions** (create and edit roles, set each permission's reach, deactivate or delete), **People** (change a role, deactivate, reset a password, sign out everywhere, add personal exceptions, and preview exactly who a person can reach), **Personal exceptions** (all of them, removable), and **Activity log** (needs `audit.read`).
+
+It uses the RBAC APIs above plus `GET /audit-log/` and `GET /users/{id}/access-preview/`. In the frontend, every call goes through one whitelisted proxy route (`src/app/api/admin/[...path]`); the UI is in `src/components/admin/`. Safeguards: an administrator cannot change their own role or deactivate themselves (enforced by the API, not only the UI), and a role that people still hold cannot be deleted (a clear 409 that suggests deactivating instead). It was checked by driving the real screens with fictional demo logins, and `verify_rbac` covers the new API behaviour.
 
 ## Building a module on top of RBAC and the directory
 
-Verified by writing a stand-in module (a leave-request app) against these
-interfaces and testing it end to end — not just documented. What a module
-author does:
-
-1. **Register permission codes** in a data migration of your app that
-   depends on `("accounts", "0004_...")` (create `Permission` rows, then
-   `RolePermission` grants with a scope tier per role). There is no
-   registration helper yet.
-2. **FK to `employees.Employee`** named `employee` on any employee-keyed model
-   (`ScopedEmployeePermission` scope-checks via `obj.employee_id`).
-3. **View:** `permission_classes = [ScopedEmployeePermission]`,
-   `required_permission = "leave.read"`, and filter list querysets with
-   `resolve_employee_scope(user, code)`. **Every custom `@action` must be
-   mapped**: `action_permissions = {"approve": "leave.approve"}`. Unmapped
-   custom actions raise `ImproperlyConfigured` rather than being authorised
-   by the read permission (without this, an Employee holding only
-   `leave.read` could approve their own request).
-4. Derive the employee from `request.user.employee` on create, never from the
-   request body; call `audit.service.write_audit(...)` on every mutation.
-5. **Ship a `verify_<module>` command** (next section) so the module's access
-   rules can be watched working, not just trusted from a passing test run.
+Read [`MODULE-GUIDE.md`](MODULE-GUIDE.md). In short: add your app to `INSTALLED_APPS`,
+declare permissions in `<app>/rbac.py`, put an `employee` FK on your models, set
+`required_permission` / `write_permission` / `action_permissions` on your view, and
+expose `api_urls.py`. Routes and permissions are picked up automatically, startup
+checks catch wiring mistakes, and one declaration
+(`core.conformance.ScopedEndpoint`) gives you a live `verify_<module>` command and a
+pytest test that prove the module honours every scope tier. `example_leave/` is a
+complete working reference.
 
 ## Live verification (required for every module and change)
 
@@ -139,12 +134,13 @@ against the dev database, and it exits non-zero on any failure so CI can run it.
 python manage.py verify_rbac
 ```
 
-`verify_rbac` currently runs 64 checks in about three seconds: authentication
+`verify_rbac` currently runs 87 checks in about three seconds: authentication
 (wrong password, replayed refresh token, lockout, throttling), directory
 visibility under the four starter roles, custom roles created live at every scope
 tier (team, department, location, legal entity), per-individual grant and deny
-overrides, who may administer roles, session revocation and deactivation, and the
-audit trail those actions leave. Sample of the output:
+overrides, who may administer roles, session revocation and deactivation,
+directory writes, leaving and returning, role deactivation, and the audit trail
+those actions leave. Sample of the output:
 
 ```
 == 3. Custom roles and every scope tier, created at runtime by an admin
@@ -155,6 +151,10 @@ audit trail those actions leave. Sample of the output:
    PASS  Dana now sees exactly the 'team' population
 ```
 
+Add `--html` for a self-contained report (saved under `verification-reports/`, which
+is git-ignored) and `--open` to show it in the browser. `verify_example_leave` does the
+same for the reference module, proving the plug-in mechanism end to end.
+
 To add one for a new module, subclass `core.verification.VerificationCommand`
 and implement `verify(self, v)`; the harness provides `v.login(...)` (a real
 `/auth/login`), request tracing, `v.expect(...)`/`v.check(...)`, the rollback and
@@ -163,11 +163,6 @@ example, and `accounts/tests/test_verify_rbac.py` for how to prove the command
 fails when the behaviour it checks is broken (a verification that cannot fail
 proves nothing). Output never echoes response bodies, since the dev database may
 hold real employee data.
-
-Not yet shared: the `{success, data}` snake_case response wrapper the
-directory pages need lives in `employees/views.py::FrontendEnvelopeMixin`;
-each module's frontend pages define their own expected shape, so check the
-page source, not the docs.
 
 ## Real employee data — this repo is public
 
@@ -228,7 +223,7 @@ ruff check .
 black --check .
 ```
 
-To exercise the real auth flow: `python manage.py seed_demo_users` creates
+To exercise the real auth flow (or, for a fuller demo, `python manage.py seed_demo_org`, which adds a fictional eight-person organisation with logins `demo.<name>@hrms.local` / `DemoPass123!`, removable with `--remove`): `python manage.py seed_demo_users` creates
 one login per starter role (password `DemoPass123!`), then `POST
 /api/v1/auth/login` with one of those emails. For `/admin/` access
 specifically, `python manage.py createsuperuser` still works via Django's own
