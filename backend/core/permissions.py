@@ -28,18 +28,24 @@ from employees.models import Employee
 # DRF's built-in ModelViewSet actions. Anything else is a custom @action
 # (approve, cancel, bulk_x, ...) and is a different privilege from reading.
 STANDARD_ACTIONS = frozenset({"list", "retrieve", "create", "update", "partial_update", "destroy"})
+# The standard actions that change data. Reading a record must never authorise
+# these, so employee-scoped views declare `write_permission` (or map each one in
+# `action_permissions`).
+WRITE_ACTIONS = frozenset({"create", "update", "partial_update", "destroy"})
 
 
 def required_permission_for(view, *, strict: bool = False) -> str:
     """The permission code the current request's action requires.
 
-    `required_permission` is the default for the whole view. A view whose
-    actions need *different* codes declares `action_permissions =
-    {"approve": "leave.approve"}` — without it, an `approve` action would be
-    authorised by whatever the view-wide code is (typically `leave.read`),
-    letting anyone who can read a request approve it. Found by exercising a
-    stand-in plugin against this layer, where an Employee holding only
-    `leave.read` approved their own leave request.
+    `required_permission` is the default for reading (list/retrieve).
+    `write_permission` covers create/update/partial_update/destroy on
+    employee-scoped views. A view whose actions need *different* codes
+    declares `action_permissions = {"approve": "leave.approve"}` — without it,
+    an `approve` action would be authorised by whatever the view-wide code
+    is (typically `leave.read`), letting anyone who can read a request
+    approve it. Found by exercising a stand-in plugin against this layer,
+    where an Employee holding only `leave.read` approved their own leave
+    request.
 
     strict=True (used by ScopedEmployeePermission, i.e. employee-keyed views)
     refuses to fall back to the view-wide code for a custom action: it must
@@ -55,6 +61,16 @@ def required_permission_for(view, *, strict: bool = False) -> str:
 
     if action in mapping:
         return mapping[action]
+    if strict and action in WRITE_ACTIONS:
+        write_code = getattr(view, "write_permission", None)
+        if isinstance(write_code, str) and write_code:
+            return write_code
+        raise ImproperlyConfigured(
+            f"{view.__class__.__name__}.{action}: a write action has no permission of its own. "
+            "ScopedEmployeePermission will not authorise it with the read `required_permission`. "
+            "Set `write_permission = '<module>.write'` on the view (or map the action in "
+            "`action_permissions`), or make the view read-only."
+        )
     if strict and action is not None and action not in STANDARD_ACTIONS:
         raise ImproperlyConfigured(
             f"{view.__class__.__name__}.{action}: custom action has no entry in "

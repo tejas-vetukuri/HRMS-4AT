@@ -170,11 +170,57 @@ def test_object_check_uses_the_actions_own_code_for_scope():
     assert perm.has_object_permission(_request_for(user), view, someone_else) is False
 
 
-@pytest.mark.parametrize(
-    "action", ["list", "retrieve", "create", "update", "partial_update", "destroy", None]
-)
-def test_standard_actions_still_use_the_view_wide_code(action):
+@pytest.mark.parametrize("action", ["list", "retrieve", None])
+def test_read_actions_use_the_view_wide_code(action):
     reader = _holder_of("leave.read")
     perm = ScopedEmployeePermission()
 
     assert perm.has_permission(_request_for(reader), _view(action)) is True
+
+
+# --- write actions need their own permission: read must never authorise writing ---
+
+WRITE = ["create", "update", "partial_update", "destroy"]
+
+
+@pytest.mark.parametrize("action", WRITE)
+def test_a_write_action_without_a_write_permission_fails_loudly(action):
+    reader = _holder_of("leave.read")
+    perm = ScopedEmployeePermission()
+
+    with pytest.raises(ImproperlyConfigured, match="write_permission"):
+        perm.has_permission(_request_for(reader), _view(action))
+
+
+@pytest.mark.parametrize("action", WRITE)
+def test_read_only_holder_is_refused_a_write_action(action):
+    reader = _holder_of("leave.read")
+    view = _view(action)
+    view.write_permission = "leave.write"
+
+    assert ScopedEmployeePermission().has_permission(_request_for(reader), view) is False
+
+
+@pytest.mark.parametrize("action", WRITE)
+def test_write_permission_holder_may_perform_a_write_action(action):
+    writer = _holder_of("leave.write")
+    view = _view(action)
+    view.write_permission = "leave.write"
+
+    assert ScopedEmployeePermission().has_permission(_request_for(writer), view) is True
+
+
+def test_a_write_action_can_instead_be_mapped_individually():
+    deleter = _holder_of("leave.delete")
+    view = _view("destroy", mapping={"destroy": "leave.delete"})
+
+    assert ScopedEmployeePermission().has_permission(_request_for(deleter), view) is True
+
+
+def test_flat_capability_views_keep_one_code_for_every_action():
+    """HasPermissionCode (e.g. everything under roles.manage) is deliberately unchanged."""
+    from core.permissions import HasPermissionCode
+
+    admin = _holder_of("leave.read")
+    for action in ["list", "create", "destroy"]:
+        assert HasPermissionCode().has_permission(_request_for(admin), _view(action)) is True
