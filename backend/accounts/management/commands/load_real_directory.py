@@ -125,10 +125,23 @@ class Command(BaseCommand):
             def ln(e):
                 return (e.user.last_name or e.user.get_full_name().split()[-1]).strip().lower()
 
+            exact = {e.user.get_full_name().strip().lower(): e for e in emps}
+
             def match(rm):
-                t = [x for x in rm.lower().split() if x]
+                key = rm.strip().lower()
+                if key in exact:
+                    return exact[key]
+                t = [x for x in key.split() if x]
                 if not t:
                     return None
+                # order-independent: one name's tokens are a subset of the other's
+                # (handles surname-first manager names and middle names)
+                rmset = set(t)
+                for e in emps:
+                    es = set(e.user.get_full_name().lower().split())
+                    if es and (es <= rmset or rmset <= es):
+                        return e
+                # fall back to first-name + surname-prefix
                 cands = [e for e in emps if fn(e) == t[0]]
                 for e in cands:
                     el = ln(e)

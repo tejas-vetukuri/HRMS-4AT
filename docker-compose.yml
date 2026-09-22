@@ -46,7 +46,8 @@ services:
       - "3000:3000"
     volumes:
       # Real HR roster (gitignored PII). Present -> loads real data; absent -> demo data.
-      - "./docs/EE & Reporting-4AT Consulting LLP 1.xlsx:/data/roster.xlsx:ro"
+      # ':ro,Z' — Z relabels for SELinux hosts (Fedora/RHEL) so the container can read it.
+      - "./docs/EE & Reporting-4AT Consulting LLP 1.xlsx:/data/roster.xlsx:ro,Z"
 
   frontend:
     build: ./frontend
