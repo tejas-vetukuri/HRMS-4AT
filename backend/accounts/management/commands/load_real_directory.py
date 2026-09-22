@@ -23,6 +23,12 @@ DEMO_PW = "Welcome@123"
 ADMIN_EMAIL = "admin@hrms.local"
 ADMIN_PW = "Admin12345!"
 
+# Manager names in the sheet that don't overlap the person's own name row at all.
+# Map the "Reporting Manager" spelling -> that employee's full name (lowercased).
+MANAGER_ALIASES = {
+    "sidhardha nvn": "venkata naga sidhardha nallamalli",
+}
+
 
 def _is_junk(empno, first):
     empno_l, first_l = empno.lower(), first.lower()
@@ -71,6 +77,8 @@ class Command(BaseCommand):
         with transaction.atomic():
             Employee.objects.all().delete()
             User.objects.all().delete()
+            # Break self-referential parent links before deleting (parent FK is PROTECT).
+            Department.objects.update(parent=None)
             Department.objects.all().delete()
             Designation.objects.all().delete()
             Location.objects.all().delete()
@@ -129,6 +137,7 @@ class Command(BaseCommand):
 
             def match(rm):
                 key = rm.strip().lower()
+                key = MANAGER_ALIASES.get(key, key)
                 if key in exact:
                     return exact[key]
                 t = [x for x in key.split() if x]
