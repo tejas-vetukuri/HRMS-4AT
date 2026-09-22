@@ -25,9 +25,9 @@ su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='${POSTGRES_
 echo "==> Migrating and seeding"
 cd /app/backend
 python manage.py migrate --noinput
-if [ -f /data/roster.xlsx ]; then
-  echo "==> Loading REAL directory from /data/roster.xlsx"
-  python manage.py load_real_directory /data/roster.xlsx || true
+if [ -f /data/docs/roster.xlsx ]; then
+  echo "==> Loading REAL directory from docs/roster.xlsx"
+  python manage.py load_real_directory /data/docs/roster.xlsx || true
 else
   python manage.py createinitialadmin || true
   python manage.py seed_demo_org || true

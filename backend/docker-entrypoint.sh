@@ -10,11 +10,11 @@ done
 echo "==> Migrating"
 python manage.py migrate --noinput
 
-if [ -f /data/roster.xlsx ]; then
-  echo "==> Loading REAL directory from /data/roster.xlsx"
-  python manage.py load_real_directory /data/roster.xlsx || true
+if [ -f /data/docs/roster.xlsx ]; then
+  echo "==> Loading REAL directory from docs/roster.xlsx"
+  python manage.py load_real_directory /data/docs/roster.xlsx || true
 else
-  echo "==> No roster mounted; seeding demo data"
+  echo "==> No docs/roster.xlsx found; seeding demo data"
   python manage.py createinitialadmin || true
   python manage.py seed_demo_org || true
 fi

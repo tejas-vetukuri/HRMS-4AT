@@ -45,9 +45,10 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Real HR roster (gitignored PII). Present -> loads real data; absent -> demo data.
+      # Mount the docs/ folder (always exists) read-only. Co-devs drop the real HR
+      # export at docs/roster.xlsx (gitignored PII); present -> real data, absent -> demo.
       # ':ro,Z' — Z relabels for SELinux hosts (Fedora/RHEL) so the container can read it.
-      - "./docs/EE & Reporting-4AT Consulting LLP 1.xlsx:/data/roster.xlsx:ro,Z"
+      - "./docs:/data/docs:ro,Z"
 
   frontend:
     build: ./frontend
