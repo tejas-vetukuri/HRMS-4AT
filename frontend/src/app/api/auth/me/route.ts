@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyToBackend, setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
-import { MOCK_AUTH_ENABLED, MOCK_REFRESH_TOKEN, MOCK_USER } from '@/lib/api/mock-auth';
+import { MOCK_AUTH_ENABLED, MOCK_REFRESH_TOKEN, getMockUserByEmail, MOCK_USER } from '@/lib/api/mock-auth';
 
 // The backend now guarantees exactly one primary role per user:
 // Employee | Admin | Super Admin.
@@ -9,6 +9,8 @@ const roleMapping: Record<string, string> = {
   admin: 'admin',
   'super admin': 'superadmin',
   superadmin: 'superadmin',
+  manager: 'manager',
+  finance: 'finance',
 };
 
 export async function GET(req: NextRequest) {
@@ -21,16 +23,21 @@ export async function GET(req: NextRequest) {
           { status: 401 }
         );
       }
+
+      // Get the mock user email from cookie (set during login)
+      const userEmail = req.cookies.get('mockUserEmail')?.value;
+      const mockUser = userEmail ? getMockUserByEmail(userEmail) : MOCK_USER;
+
       return NextResponse.json({
         success: true,
         data: {
-          id: MOCK_USER.id,
-          email: MOCK_USER.email,
-          firstName: MOCK_USER.firstName,
-          lastName: MOCK_USER.lastName,
-          role: roleMapping[MOCK_USER.roles[0].name] || 'employee',
-          permissions: MOCK_USER.permissions,
-          scope: MOCK_USER.scope,
+          id: mockUser.id,
+          email: mockUser.email,
+          firstName: mockUser.firstName,
+          lastName: mockUser.lastName,
+          roles: mockUser.roles,
+          permissions: mockUser.permissions,
+          scope: mockUser.scope,
         },
       });
     }
