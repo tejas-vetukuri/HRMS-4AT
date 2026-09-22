@@ -59,5 +59,6 @@ coverage/
 .mypy_cache/
 .ruff_cache/
 
-#-----Local Work-----
-docs/
+#----- Local / sensitive data (never commit) -----
+# Real HR roster is PII — share via password manager, not git
+docs/*.xlsx
