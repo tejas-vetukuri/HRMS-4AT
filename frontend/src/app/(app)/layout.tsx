@@ -5,17 +5,28 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
+import { NotificationsDropdown } from '@/components/NotificationsDropdown';
 import {
   HomeIcon,
+  InboxIcon,
   TeamIcon,
+  WalletIcon,
+  TimerIcon,
+  CalendarCheckIcon,
+  CalendarIcon,
+  TrendingUpIcon,
+  MessageCircleIcon,
   GlobeIcon,
+  GridIcon,
   SettingsIcon,
+  HelpIcon,
   ChevronDownIcon,
   MenuIcon,
   XIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SearchIcon,
+  FingerprintIcon,
   IdCardIcon,
   BriefcaseIcon,
 } from '@/components/icons';
@@ -50,11 +61,31 @@ interface NavItem {
   children?: { label: string; href: string }[];
 }
 
-// Only modules with a real, working backend are listed. Shell pages
-// (attendance, leave, payroll, performance, etc.) were removed until their
-// backend modules are built on the core.
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon, href: '/', roles: ['admin', 'employee', 'superadmin'] },
+  { id: 'inbox', label: 'Inbox', icon: InboxIcon, href: '/inbox', badge: 5, roles: ['admin', 'employee', 'superadmin'] },
+  { id: 'attendance', label: 'Attendance', icon: CalendarCheckIcon, href: '/attendance', roles: ['admin', 'employee', 'superadmin'] },
+  { id: 'leave', label: 'Leave Management', icon: CalendarIcon, href: '/leave', roles: ['admin', 'employee', 'superadmin'] },
+  { id: 'timesheet', label: 'Timesheet', icon: TimerIcon, href: '/timesheet', roles: ['admin', 'employee', 'superadmin'] },
+  {
+    id: 'finances',
+    label: 'My Finances',
+    icon: WalletIcon,
+    href: '/payslips',
+    roles: ['admin', 'employee', 'superadmin'],
+    children: [
+      { label: 'Summary', href: '/payslips?tab=summary' },
+      { label: 'My Pay', href: '/payslips?tab=pay' },
+      { label: 'Manage Tax', href: '/payslips?tab=tax' },
+    ],
+  },
+  {
+    id: 'perf',
+    label: 'Performance',
+    icon: TrendingUpIcon,
+    href: '/performance',
+    roles: ['admin', 'employee', 'superadmin'],
+  },
   { id: 'team', label: 'My Team', icon: TeamIcon, href: '/team', roles: ['admin', 'employee', 'superadmin'] },
   {
     id: 'org-all',
@@ -65,11 +96,14 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Employee Directory', href: '/org?tab=directory' },
       { label: 'Organisation Chart', href: '/org?tab=chart' },
+      { label: 'Organization Documents', href: '/org?tab=documents' },
     ],
   },
   { id: 'org', label: 'Organization', icon: TeamIcon, href: '/employees', roles: ['superadmin'], requireOrgScope: true },
   { id: 'manage-org', label: 'Manage organisation', icon: BriefcaseIcon, href: '/manage-org', roles: ['admin', 'employee', 'superadmin'], requireAnyPermission: ['employees.write', 'org.manage'] },
   { id: 'admin', label: 'Access control', icon: IdCardIcon, href: '/admin', roles: ['admin', 'employee', 'superadmin'], requirePermission: 'roles.manage' },
+  { id: 'engage', label: 'Engage', icon: MessageCircleIcon, href: '/engage', roles: ['admin', 'employee', 'superadmin'] },
+  { id: 'apps', label: 'Apps', icon: GridIcon, href: '/apps', roles: ['admin', 'employee', 'superadmin'] },
 ];
 
 const COLLAPSE_STORAGE_KEY = 'hrms-sidebar-collapsed';
@@ -290,7 +324,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="text-xs text-slate-400 truncate">{roleLabel(user?.role)}</div>
           </div>
           <button
-            onClick={() => router.push('/profile')}
+            onClick={() => router.push('/settings')}
             aria-label="Account settings"
             title="Account settings"
             className={`shrink-0 text-slate-400 hover:text-white transition-colors ${collapsed ? 'md:hidden' : ''}`}
@@ -355,7 +389,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
-            <ProfileDropdown />
+            <button
+              onClick={() => router.push('/help')}
+              className="p-2.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              title="Help"
+            >
+              <HelpIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => router.push('/attendance')}
+              className="shrink-0 flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-full border border-indigo-200 text-indigo-600 text-sm font-semibold hover:bg-indigo-50 transition-colors"
+              title="Quick Check In"
+            >
+              <FingerprintIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Quick Check In</span>
+            </button>
+            <NotificationsDropdown />
+            <div className="pl-2 sm:pl-3 border-l border-slate-200">
+              <ProfileDropdown />
+            </div>
           </div>
         </header>
 
