@@ -29,7 +29,9 @@ INSTALLED_APPS = [
     "accounts",
     "employees",
     "audit",
-    # approvals, audit, notifications, documents, and the plugin apps land here
+    # Plug-in modules built on the core.
+    "payroll",
+    # approvals, notifications, documents, and further plugin apps land here
     # as Phase 0/2/3+ scaffolding proceeds (docs/TASKS.md P0-E1-03/04).
 ]
 
