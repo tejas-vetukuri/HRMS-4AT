@@ -7,10 +7,17 @@ until python -c "import socket,os; s=socket.socket(); s.settimeout(2); s.connect
   sleep 1
 done
 
-echo "==> Migrating and seeding"
+echo "==> Migrating"
 python manage.py migrate --noinput
-python manage.py createinitialadmin || true
-python manage.py seed_demo_org || true
+
+if [ -f /data/roster.xlsx ]; then
+  echo "==> Loading REAL directory from /data/roster.xlsx"
+  python manage.py load_real_directory /data/roster.xlsx || true
+else
+  echo "==> No roster mounted; seeding demo data"
+  python manage.py createinitialadmin || true
+  python manage.py seed_demo_org || true
+fi
 
 echo "==> Starting Django on :3000"
 exec python manage.py runserver 0.0.0.0:3000

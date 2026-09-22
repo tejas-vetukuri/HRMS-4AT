@@ -44,6 +44,9 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    volumes:
+      # Real HR roster (gitignored PII). Present -> loads real data; absent -> demo data.
+      - "./docs/EE & Reporting-4AT Consulting LLP 1.xlsx:/data/roster.xlsx:ro"
 
   frontend:
     build: ./frontend

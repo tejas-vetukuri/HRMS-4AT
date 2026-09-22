@@ -25,8 +25,13 @@ su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='${POSTGRES_
 echo "==> Migrating and seeding"
 cd /app/backend
 python manage.py migrate --noinput
-python manage.py createinitialadmin || true
-python manage.py seed_demo_org || true
+if [ -f /data/roster.xlsx ]; then
+  echo "==> Loading REAL directory from /data/roster.xlsx"
+  python manage.py load_real_directory /data/roster.xlsx || true
+else
+  python manage.py createinitialadmin || true
+  python manage.py seed_demo_org || true
+fi
 
 echo "==> Starting Django on :3000 and Next.js on :3001"
 cd /app/backend && python manage.py runserver 0.0.0.0:3000 &
