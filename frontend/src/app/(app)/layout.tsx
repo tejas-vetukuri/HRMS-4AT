@@ -28,6 +28,7 @@ import {
   SearchIcon,
   FingerprintIcon,
   IdCardIcon,
+  BriefcaseIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -54,6 +55,8 @@ interface NavItem {
   requireOrgScope?: boolean;
   /** Only show for users holding this backend permission code (e.g. 'roles.manage'). */
   requirePermission?: string;
+  /** Only show for users holding at least one of these permission codes. */
+  requireAnyPermission?: string[];
   badge?: number;
   children?: { label: string; href: string }[];
 }
@@ -97,6 +100,20 @@ const navItems: NavItem[] = [
     ],
   },
   { id: 'org', label: 'Organization', icon: TeamIcon, href: '/employees', roles: ['superadmin'], requireOrgScope: true },
+  { id: 'manage-org', label: 'Manage organisation', icon: BriefcaseIcon, href: '/manage-org', roles: ['admin', 'employee', 'superadmin'], requireAnyPermission: ['employees.write', 'org.manage'] },
+  {
+    id: 'payroll',
+    label: 'Payroll',
+    icon: WalletIcon,
+    href: '/payroll-inputs',
+    roles: ['admin', 'employee', 'superadmin'],
+    requireOrgScope: true,
+    requireAnyPermission: ['payroll.write', 'payroll.manage'],
+    children: [
+      { label: 'Payroll Inputs', href: '/payroll-inputs' },
+      { label: 'Payroll Setup', href: '/payroll-setup' },
+    ],
+  },
   { id: 'admin', label: 'Access control', icon: IdCardIcon, href: '/admin', roles: ['admin', 'employee', 'superadmin'], requirePermission: 'roles.manage' },
   { id: 'engage', label: 'Engage', icon: MessageCircleIcon, href: '/engage', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'apps', label: 'Apps', icon: GridIcon, href: '/apps', roles: ['admin', 'employee', 'superadmin'] },
@@ -112,6 +129,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
   '/team': { title: 'My Team', subtitle: 'View your team, schedules, and workplace activity' },
   '/employees': { title: 'Organization', subtitle: 'Manage employees and organizational documents' },
+  '/manage-org': { title: 'Manage organisation', subtitle: 'Employees, reporting lines and the organisation structure' },
   '/admin': { title: 'Access control', subtitle: 'Manage roles, permissions, people and the activity log' },
   '/org': { title: 'Organisation', subtitle: 'Browse the employee directory and organisation chart' },
   '/settings': { title: 'Settings', subtitle: 'Manage your account preferences' },
@@ -188,7 +206,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       !!user &&
       item.roles.includes(user.role as RequiredRole) &&
       (!item.requireOrgScope || hasOrgScope()) &&
-      (!item.requirePermission || hasPermission(item.requirePermission)),
+      (!item.requirePermission || hasPermission(item.requirePermission)) &&
+      (!item.requireAnyPermission || item.requireAnyPermission.some((code) => hasPermission(code))),
   );
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));

@@ -100,6 +100,9 @@ class Session:
     def patch(self, path, body):
         return self._send("patch", path, body)
 
+    def put(self, path, body):
+        return self._send("put", path, body)
+
     def delete(self, path):
         return self._send("delete", path)
 

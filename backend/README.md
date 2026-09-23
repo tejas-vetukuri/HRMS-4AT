@@ -111,6 +111,46 @@ A section of the existing frontend at `/admin` (sidebar: **Access control**), sh
 
 It uses the RBAC APIs above plus `GET /audit-log/` and `GET /users/{id}/access-preview/`. In the frontend, every call goes through one whitelisted proxy route (`src/app/api/admin/[...path]`); the UI is in `src/components/admin/`. Safeguards: an administrator cannot change their own role or deactivate themselves (enforced by the API, not only the UI), and a role that people still hold cannot be deleted (a clear 409 that suggests deactivating instead). It was checked by driving the real screens with fictional demo logins, and `verify_rbac` covers the new API behaviour.
 
+## Employee and organisation module
+
+Built on the existing 97 employees, and fully manageable from the frontend at
+`/manage-org` (sidebar: **Manage organisation**, shown to holders of `employees.write` or
+`org.manage`). Three tabs: **Employees** (add, edit, filter, record departures and
+returns, personal details, per-person history), **Organisation structure** (departments as a
+tree, job titles, locations, legal entities, business units, cost centres), and **Reporting
+lines** (an expandable tree, with a shortcut to the people who have no manager).
+
+What it adds to the core:
+
+- **Model:** business units, cost centres, and on each employee the business unit, cost
+  centre, employment type, joining and exit dates, exit reason, and personal details
+  (personal email, phone, date of birth, gender).
+- **Permissions** (declared in `employees/rbac.py`): `org.manage`, `employees.personal.read`,
+  `employees.personal.write` (all HR Admin by default), and `ess.profile.read` /
+  `ess.profile.write` (everyone, for their own profile).
+- **Personal details are kept out of the ordinary directory.** They live at
+  `/employees/{id}/personal/` behind their own permissions, and the audit entry records which
+  fields changed, never the values.
+- **Self-service:** `GET/PUT/PATCH /ess/profile` is always the caller's own record; it can
+  change only contact details, date of birth and gender.
+- **Lifecycle:** marking someone as left records the exit date and ends their access at once;
+  bringing them back clears the exit details and restores it.
+- **Structure management** at `/org/<kind>/` (org.manage): a unit that people still belong to
+  cannot be deleted (a clear 409 that suggests deactivating); departments cannot form loops.
+- The frontend's Organisation and Profile pages, which called `/business-units`,
+  `/cost-centers` and `/ess/profile` before they existed, now load completely.
+
+Checked live with `python manage.py verify_employees` (74 checks, including the plug-in
+conformance kit against the directory), and by driving the real screens with fictional
+demo logins.
+
+**Sample data.** `python manage.py seed_sample_org_data` fills the gaps on the existing
+employees with labelled placeholders: three sample business units, one sample cost centre per
+department, a placeholder joining date worked out from each employee code, and the default
+legal entity. It never overwrites a real value, and `--remove` takes the samples back out
+(it does not undo the legal-entity assignment). Real dates and assignments come from HR through
+the screens or an import and replace the placeholders.
+
 ## Building a module on top of RBAC and the directory
 
 Read [`MODULE-GUIDE.md`](MODULE-GUIDE.md). In short: add your app to `INSTALLED_APPS`,

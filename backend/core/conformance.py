@@ -143,13 +143,19 @@ def run_conformance(v, org: FictionalOrg, endpoint: ScopedEndpoint):
     def login(key):
         return v.login(key, org.email(key), PASSWORD)
 
-    def sees(session, expected_keys, label):
+    def sees(session, expected_keys, label, allow_others=False):
+        """The caller sees exactly `expected_keys` of the fictional people. At the
+        widest tier `allow_others` is set: a database that already holds real
+        records legitimately shows them too, so only the fictional people are
+        compared there."""
         response = session.get(endpoint.list_url)
         keys, others = _owners(org, endpoint, response)
         v.note(f"sees records of: {org.names(keys)}" + (f" (+{others} others)" if others else ""))
         v.check(
             label,
-            response.status_code == 200 and keys == set(expected_keys) and others == 0,
+            response.status_code == 200
+            and keys == set(expected_keys)
+            and (others == 0 or allow_others),
             f"HTTP {response.status_code}; expected {org.names(expected_keys)}, "
             f"got {org.names(keys)} +{others} others",
         )
@@ -176,7 +182,12 @@ def run_conformance(v, org: FictionalOrg, endpoint: ScopedEndpoint):
         v.note(f"--- tier '{tier}' as {org.first_name(persona)}")
         org.give_permission(persona, read, tier)
         session = login(persona)
-        sees(session, expected, f"list under '{tier}' returns exactly the right people's records")
+        sees(
+            session,
+            expected,
+            f"list under '{tier}' returns exactly the right people's records",
+            allow_others=tier == ScopeTier.ALL,
+        )
 
         inside = sorted(expected - {persona})
         outside = sorted(set(org.people) - expected)
