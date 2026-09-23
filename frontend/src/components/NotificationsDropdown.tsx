@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { BellIcon } from '@/components/icons';
 import { notificationsApi, type Notification, NotificationsApiError } from '@/lib/api/notifications';
@@ -219,9 +220,10 @@ function AnnounceComposer({ onClose, onSent }: { onClose: () => void; onSent: ()
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-5">
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-5 my-auto">
         <h3 className="text-base font-bold text-slate-900 mb-3">Send announcement</h3>
         <p className="text-xs text-gray-500 mb-3">Goes to every active employee&apos;s notifications.</p>
         {error ? (
@@ -260,6 +262,7 @@ function AnnounceComposer({ onClose, onSent }: { onClose: () => void; onSent: ()
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
