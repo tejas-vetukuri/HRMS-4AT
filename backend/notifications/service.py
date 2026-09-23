@@ -17,6 +17,22 @@ def notify(user, type: str, title: str, body: str | None = None) -> Notification
     return Notification.objects.create(user=user, type=type, title=title, body=body)
 
 
+def broadcast(title: str, body: str | None = None, recipients: str = "all") -> int:
+    """Send an announcement to many users at once — one in-app notification each.
+    `recipients` is "all" active users or "admins" (superusers). Returns the count.
+    Sending is an admin action; the caller (endpoint/command) enforces that."""
+    from django.contrib.auth import get_user_model
+
+    users = get_user_model().objects.filter(is_active=True)
+    if recipients == "admins":
+        users = users.filter(is_superuser=True)
+    count = 0
+    for user in users:
+        notify(user, "announcement", title, body)
+        count += 1
+    return count
+
+
 def send_email(to: str, subject: str, body: str) -> bool:
     """Best-effort transactional email. Never raises into the caller's flow — a
     failed email must not roll back the business action that triggered it; it is

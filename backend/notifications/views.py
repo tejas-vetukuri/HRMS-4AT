@@ -12,10 +12,38 @@ from rest_framework.views import APIView
 
 from .models import Notification
 from .serializers import NotificationSerializer
+from .service import broadcast
 
 
 def _mine(request):
     return Notification.objects.filter(user=request.user)
+
+
+class AnnounceView(APIView):
+    """Send a broadcast announcement — superadmin only. Every other notification
+    endpoint is self-scoped and open to any signed-in user; *sending* to everyone
+    is the one privileged action, gated on is_superuser."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_superuser:
+            return Response(
+                {
+                    "success": False,
+                    "error": {"message": "Only a superadmin can send announcements."},
+                },
+                status=403,
+            )
+        title = (request.data.get("title") or "").strip()
+        body = request.data.get("body") or ""
+        recipients = request.data.get("recipients") or "all"
+        if not title:
+            return Response(
+                {"success": False, "error": {"message": "A title is required."}}, status=400
+            )
+        count = broadcast(title, body, recipients if recipients in ("all", "admins") else "all")
+        return Response({"success": True, "data": {"count": count}}, status=201)
 
 
 class NotificationListView(APIView):

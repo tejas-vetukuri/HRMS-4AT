@@ -8,10 +8,9 @@ Built on the notifications primitive (notify + send_email). Email delivery
 depends on EMAIL_BACKEND — the console backend just logs it; set SMTP env vars
 for real delivery."""
 
-from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-from notifications.service import notify, send_email
+from notifications.service import broadcast, send_email
 
 
 class Command(BaseCommand):
@@ -29,14 +28,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        users = get_user_model().objects.filter(is_active=True)
-        if options["recipients"] == "admins":
-            users = users.filter(is_superuser=True)
-
-        count = 0
-        for user in users:
-            notify(user, "announcement", options["title"], options["body"])
-            count += 1
+        count = broadcast(options["title"], options["body"], options["recipients"])
         self.stdout.write(self.style.SUCCESS(f"Created {count} in-app notifications."))
 
         if options["email"]:
