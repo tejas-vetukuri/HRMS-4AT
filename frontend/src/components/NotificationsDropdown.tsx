@@ -131,7 +131,10 @@ export function NotificationsDropdown() {
             <div className="flex items-center gap-3">
               {isSuperadmin ? (
                 <button
-                  onClick={() => setComposeOpen(true)}
+                  onClick={() => {
+                    setComposeOpen(true);
+                    setIsOpen(false);
+                  }}
                   className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
                 >
                   + Announce
@@ -147,16 +150,6 @@ export function NotificationsDropdown() {
               ) : null}
             </div>
           </div>
-
-          {composeOpen && isSuperadmin ? (
-            <AnnounceComposer
-              onClose={() => setComposeOpen(false)}
-              onSent={() => {
-                setComposeOpen(false);
-                load();
-              }}
-            />
-          ) : null}
 
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
@@ -193,6 +186,16 @@ export function NotificationsDropdown() {
             )}
           </div>
         </div>
+      ) : null}
+
+      {composeOpen && isSuperadmin ? (
+        <AnnounceComposer
+          onClose={() => setComposeOpen(false)}
+          onSent={() => {
+            setComposeOpen(false);
+            load();
+          }}
+        />
       ) : null}
     </div>
   );
