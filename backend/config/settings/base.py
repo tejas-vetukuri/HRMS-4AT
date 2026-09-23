@@ -29,8 +29,9 @@ INSTALLED_APPS = [
     "accounts",
     "employees",
     "audit",
-    # Core primitive 5 (notifications app) — see docs/ARCHITECTURE.md.
+    # Core primitives 5 & 6 (notifications / documents apps) — docs/ARCHITECTURE.md.
     "notifications",
+    "documents",
     # Plug-in modules built on the core.
     "payroll",
     # approvals, notifications, documents, and further plugin apps land here
@@ -101,6 +102,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Documents primitive (#6): files land on local disk under MEDIA_ROOT for now;
+# swapping to S3 later is a storage-backend change, not a schema change.
+MEDIA_URL = "media/"
+MEDIA_ROOT = env("DJANGO_MEDIA_ROOT", default=str(BASE_DIR / "media"))
 
 # Notifications primitive (#5): console backend until real SMTP/SES is wired for
 # prod. send_email() is fail-silent regardless (notifications/service.py).
