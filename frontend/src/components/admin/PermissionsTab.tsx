@@ -12,33 +12,7 @@ import {
   type ScopeTier,
 } from '@/lib/admin/api';
 import { Badge, Button, Notice, Select, SectionTitle } from './ui';
-
-// Permissions are grouped by the module that owns them — the part of the code
-// before the first dot (payroll.read -> "payroll"). These are the friendly
-// section names; an unknown prefix falls back to a title-cased version, so a
-// new module's permissions show up grouped automatically.
-const GROUP_LABELS: Record<string, string> = {
-  employees: 'Employee data',
-  ess: 'Self-service (own profile)',
-  example_leave: 'Leaves & attendance',
-  leave: 'Leaves & attendance',
-  attendance: 'Leaves & attendance',
-  payroll: 'Payroll',
-  org: 'Organisation',
-  roles: 'Access control',
-  audit: 'Audit & activity',
-};
-
-function groupKey(code: string): string {
-  return code.split('.')[0];
-}
-
-function groupLabel(key: string): string {
-  return (
-    GROUP_LABELS[key] ??
-    key.replace(/_/g, ' ').replace(/\b\w/, (c) => c.toUpperCase())
-  );
-}
+import { groupPermissions } from '@/lib/admin/permissionGroups';
 
 export function PermissionsTab() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -62,17 +36,7 @@ export function PermissionsTab() {
     })();
   }, []);
 
-  // { groupLabel: Permission[] }, each group's permissions sorted by code.
-  const groups = useMemo(() => {
-    const byGroup = new Map<string, Permission[]>();
-    for (const perm of permissions) {
-      const label = groupLabel(groupKey(perm.code));
-      (byGroup.get(label) ?? byGroup.set(label, []).get(label)!).push(perm);
-    }
-    return [...byGroup.entries()]
-      .map(([label, perms]) => ({ label, perms: perms.sort((a, b) => a.code.localeCompare(b.code)) }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [permissions]);
+  const groups = useMemo(() => groupPermissions(permissions), [permissions]);
 
   const selected = permissions.find((p) => p.id === selectedId) ?? null;
 

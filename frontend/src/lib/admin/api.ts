@@ -56,6 +56,7 @@ export interface RoleGrant {
 export interface Role {
   id: number;
   name: string;
+  description: string;
   archetype: Archetype;
   isActive: boolean;
   userCount: number;
@@ -156,9 +157,12 @@ export const qs = (params: Record<string, string | number | undefined>) => {
 export const adminApi = {
   // roles
   listRoles: () => request<Page<Role>>(`roles/${qs({ pageSize: 100 })}`),
-  createRole: (body: { name: string; archetype: Archetype }) =>
+  createRole: (body: { name: string; description?: string; archetype: Archetype }) =>
     request<Role>('roles/', { method: 'POST', body }),
-  updateRole: (id: number, body: Partial<{ name: string; archetype: Archetype; isActive: boolean }>) =>
+  updateRole: (
+    id: number,
+    body: Partial<{ name: string; description: string; archetype: Archetype; isActive: boolean }>,
+  ) =>
     request<Role>(`roles/${id}/`, { method: 'PATCH', body }),
   deleteRole: (id: number) => request<void>(`roles/${id}/`, { method: 'DELETE' }),
   listPermissions: () => request<Page<Permission>>(`permissions/${qs({ pageSize: 100 })}`),
