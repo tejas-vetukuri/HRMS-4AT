@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import views as v
 
 setup_router = DefaultRouter()
+setup_router.register(r"legal-entities", v.LegalEntityViewSet, basename="payroll-legal-entity")
 setup_router.register(r"legal-entity-profiles", v.LegalEntityPayrollProfileViewSet)
 setup_router.register(r"pay-schedules", v.PayScheduleViewSet)
 setup_router.register(r"statutory-configs", v.StatutoryConfigViewSet)
