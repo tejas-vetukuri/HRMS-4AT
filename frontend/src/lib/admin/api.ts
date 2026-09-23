@@ -183,7 +183,7 @@ export const adminApi = {
     request<AccessPreview>(`users/${id}/access-preview/${qs({ permission })}`),
 
   // personal exceptions
-  listExceptions: (p: { user?: number; page?: number; pageSize?: number }) =>
+  listExceptions: (p: { user?: number; permission?: number; page?: number; pageSize?: number }) =>
     request<Page<Exception>>(`user-permission-overrides/${qs(p)}`),
   addException: (body: { user: number; permission: number; scopeTier: ScopeTier; isGranted: boolean }) =>
     request<Exception>('user-permission-overrides/', { method: 'POST', body }),
