@@ -74,4 +74,10 @@ export const notificationsApi = {
     request<{ notification: Notification }>(`/${id}/read`, { method: 'PUT' }),
   markAllRead: () =>
     request<{ markedCount: number }>('/read-all', { method: 'PUT' }),
+  // Superadmin only (the backend enforces it) — broadcast an announcement.
+  announce: (title: string, body: string) =>
+    request<{ count: number }>('/announce', {
+      method: 'POST',
+      body: JSON.stringify({ title, body }),
+    }),
 };

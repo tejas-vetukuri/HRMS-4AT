@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BellIcon } from '@/components/icons';
 import { notificationsApi, type Notification, NotificationsApiError } from '@/lib/api/notifications';
+import { useAuth } from '@/lib/auth/useAuth';
 
 // No link/entity field on the backend row yet (P3-02 hasn't wired up any
 // producers, so there's nothing real to point at either) — a light prefix
@@ -37,6 +38,9 @@ export function NotificationsDropdown() {
   const [error, setError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -123,15 +127,35 @@ export function NotificationsDropdown() {
         <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-lg border border-gray-200 z-50">
           <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-900">Notifications</span>
-            {unreadCount > 0 ? (
-              <button
-                onClick={handleMarkAllRead}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-              >
-                Mark all read
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {isSuperadmin ? (
+                <button
+                  onClick={() => setComposeOpen(true)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                >
+                  + Announce
+                </button>
+              ) : null}
+              {unreadCount > 0 ? (
+                <button
+                  onClick={handleMarkAllRead}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                >
+                  Mark all read
+                </button>
+              ) : null}
+            </div>
           </div>
+
+          {composeOpen && isSuperadmin ? (
+            <AnnounceComposer
+              onClose={() => setComposeOpen(false)}
+              onSent={() => {
+                setComposeOpen(false);
+                load();
+              }}
+            />
+          ) : null}
 
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
@@ -169,6 +193,73 @@ export function NotificationsDropdown() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Superadmin-only announcement composer — a small modal over the bell dropdown.
+ * The backend also enforces is_superuser, so this is a convenience gate, not the
+ * security boundary. */
+function AnnounceComposer({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    if (!title.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await notificationsApi.announce(title.trim(), body);
+      onSent();
+    } catch (e) {
+      setError(e instanceof NotificationsApiError ? e.message : 'Could not send announcement');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-5">
+        <h3 className="text-base font-bold text-slate-900 mb-3">Send announcement</h3>
+        <p className="text-xs text-gray-500 mb-3">Goes to every active employee&apos;s notifications.</p>
+        {error ? (
+          <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+            {error}
+          </div>
+        ) : null}
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Title"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-3"
+        />
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Write your message…"
+          rows={6}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="px-3 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={send}
+            disabled={busy || !title.trim()}
+            className="px-3 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {busy ? 'Sending…' : 'Send to everyone'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
