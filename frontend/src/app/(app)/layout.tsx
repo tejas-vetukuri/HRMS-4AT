@@ -13,7 +13,6 @@ import {
   WalletIcon,
   TimerIcon,
   CalendarCheckIcon,
-  CalendarIcon,
   TrendingUpIcon,
   MessageCircleIcon,
   GlobeIcon,
@@ -52,14 +51,25 @@ interface NavItem {
    * grant access — see useRequireAccess for the matching route guard. */
   requireOrgScope?: boolean;
   badge?: number;
-  children?: { label: string; href: string }[];
+  children?: { label: string; href: string; anyPermission?: string[] }[];
 }
 
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon, href: '/', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'inbox', label: 'Inbox', icon: InboxIcon, href: '/inbox', badge: 5, roles: ['admin', 'employee', 'superadmin'] },
-  { id: 'attendance', label: 'Attendance', icon: CalendarCheckIcon, href: '/attendance', roles: ['admin', 'employee', 'superadmin'] },
-  { id: 'leave', label: 'Leave Management', icon: CalendarIcon, href: '/leave', roles: ['admin', 'employee', 'superadmin'] },
+  {
+    id: 'attendance',
+    label: 'Attendance',
+    icon: CalendarCheckIcon,
+    href: '/attendance',
+    roles: ['admin', 'employee', 'superadmin'],
+    children: [
+      { label: 'Attendance', href: '/attendance' },
+      { label: 'Leave Management', href: '/leave' },
+      { label: 'Approvals', href: '/approvals', anyPermission: ['leave.approve', 'attendance.approve'] },
+      { label: 'Calendar Management', href: '/attendance/calendar', anyPermission: ['calendar.manage'] },
+    ],
+  },
   { id: 'timesheet', label: 'Timesheet', icon: TimerIcon, href: '/timesheet', roles: ['admin', 'employee', 'superadmin'] },
   {
     id: 'finances',
@@ -105,6 +115,8 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/inbox': { title: 'Inbox', subtitle: 'Review messages, requests, and notifications that need your attention' },
   '/me/attendance': { title: 'Attendance', subtitle: 'Track your attendance, timings, and attendance requests' },
   '/leave': { title: 'Leave Management', subtitle: 'View your leave balance, requests, and time off' },
+  '/approvals': { title: 'Approvals', subtitle: 'Review pending leave, work from home, and regularisation requests' },
+  '/attendance/calendar': { title: 'Calendar Management', subtitle: 'Manage holidays, WFH days, and special events for the whole organisation' },
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
   '/team': { title: 'My Team', subtitle: 'View your team, schedules, and workplace activity' },
   '/employees': { title: 'Organization', subtitle: 'Manage employees and organizational documents' },
@@ -131,7 +143,7 @@ function getPageTitle(pathname: string) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, isAuthenticated, hasOrgScope } = useAuth();
+  const { user, isLoading, isAuthenticated, hasOrgScope, hasPermission } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -146,6 +158,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsMobileNavOpen(false);
+  }, [pathname]);
+
+  // Auto-expand (and keep expanded) whichever section owns the current page,
+  // so landing on a child route like /leave shows it nested under its parent
+  // ("Attendance") instead of the sidebar looking collapsed on that page.
+  useEffect(() => {
+    const owner = navItems.find((item) =>
+      item.children?.some((c) => pathname.startsWith(c.href.split('?')[0])),
+    );
+    if (owner) setExpandedId(owner.id);
   }, [pathname]);
 
   // Restore the user's collapse preference, defaulting tablet widths to collapsed.
@@ -185,13 +207,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       (!item.requireOrgScope || hasOrgScope()),
   );
 
-  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
+  const isActive = (item: NavItem) => {
+    if (item.href === '/') return pathname === '/';
+    if (pathname.startsWith(item.href)) return true;
+    return item.children?.some((c) => pathname.startsWith(c.href.split('?')[0])) ?? false;
+  };
 
   const currentPageTitle = getPageTitle(pathname);
 
   const renderNavLink = (item: NavItem) => {
     const Icon = item.icon;
-    const active = isActive(item.href);
+    const active = isActive(item);
     const hasChildren = !!item.children?.length;
     const expanded = expandedId === item.id;
 
@@ -249,7 +275,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {hasChildren && expanded && !collapsed ? (
           <div className="mt-1 ml-8 space-y-0.5 border-l border-slate-700 pl-3">
-            {item.children!.map((child) => (
+            {item.children!
+              .filter((child) => !child.anyPermission || child.anyPermission.some(hasPermission))
+              .map((child) => (
               <Link
                 key={child.label}
                 href={child.href}
