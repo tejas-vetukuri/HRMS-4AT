@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/useAuth';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import { NotificationsDropdown } from '@/components/NotificationsDropdown';
 import {
@@ -170,6 +170,53 @@ function getPageTitle(pathname: string) {
   return match ? pageTitles[match] : null;
 }
 
+/** Uniform page sub-nav: the active sidebar menu's children rendered as tabs
+ * below the page heading. Reads the URL so a `?tab=` child highlights correctly
+ * (defaulting to the first tab child when no tab is set). */
+function SubNav({ items }: { items: NavChild[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  if (items.length === 0) return null;
+
+  const parsed = items.map((c) => {
+    const [path, query] = c.href.split('?');
+    return { ...c, path, tab: query ? new URLSearchParams(query).get('tab') : null };
+  });
+  const currentTab = searchParams.get('tab');
+
+  const isActive = (c: (typeof parsed)[number]) => {
+    if (pathname !== c.path && !pathname.startsWith(`${c.path}/`)) return false;
+    if (c.tab == null) return true;
+    const tabsHere = parsed.filter((x) => x.path === c.path && x.tab != null);
+    return c.tab === (currentTab ?? tabsHere[0]?.tab);
+  };
+
+  return (
+    <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8">
+      <div className="flex gap-5 overflow-x-auto scrollbar-hide" role="tablist">
+        {parsed.map((c) => {
+          const active = isActive(c);
+          return (
+            <Link
+              key={c.href}
+              href={c.href}
+              role="tab"
+              aria-selected={active}
+              className={`px-1 py-3 border-b-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+                active
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {c.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated, hasOrgScope, hasPermission } = useAuth();
   const router = useRouter();
@@ -236,6 +283,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
   const currentPageTitle = getPageTitle(pathname);
+
+  // The sidebar menu the current page belongs to, and its access-filtered
+  // children — mirrored as a sub-nav bar under the page heading (uniform).
+  const matchPath = (h: string) => {
+    const p = h.split('?')[0];
+    return p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`);
+  };
+  const activeItem = navItems.find(
+    (it) => matchPath(it.href) || it.children?.some((c) => matchPath(c.href)),
+  );
+  const subNavChildren = activeItem?.children?.filter(canAccess) ?? [];
 
   const renderNavLink = (item: NavItem) => {
     const Icon = item.icon;
@@ -447,6 +505,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+
+        {subNavChildren.length > 0 ? (
+          <Suspense fallback={null}>
+            <SubNav items={subNavChildren} />
+          </Suspense>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>

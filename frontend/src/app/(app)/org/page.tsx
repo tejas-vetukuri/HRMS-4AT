@@ -159,30 +159,8 @@ export default function OrgPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-['Inter']">
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-8">
-        <div className="flex gap-6">
-          {(
-            [
-              ['directory', 'Employee Directory'],
-              ['chart', 'Organisation Chart'],
-              ['documents', 'Organization Documents'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`px-1 py-3 border-b-2 font-semibold text-sm transition-colors ${
-                tab === id
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* Section tabs come from the uniform sub-nav in the app layout, driven by
+          the ?tab= query this page reads above. */}
       <div className="p-4 sm:p-8">
         {tab === 'documents' ? (
           <Documents />
