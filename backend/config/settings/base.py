@@ -29,7 +29,8 @@ INSTALLED_APPS = [
     "accounts",
     "employees",
     "audit",
-    # Core primitives 5 & 6 (notifications / documents apps) — docs/ARCHITECTURE.md.
+    # Core primitives 3, 5 & 6 (approvals / notifications / documents) — docs/ARCHITECTURE.md.
+    "approvals",
     "notifications",
     "documents",
     # Plug-in modules built on the core.
