@@ -130,7 +130,7 @@ export default function OrgPage() {
         setError(null);
         const [rawEmployees, departments, businessUnits, locations, costCenters, designations, profile] =
           await Promise.all([
-            fetchJson<RawEmployee[]>('/api/employees'),
+            fetchJson<RawEmployee[]>('/api/org-directory'),
             fetchJson<NamedEntity[]>('/api/departments'),
             fetchJson<NamedEntity[]>('/api/business-units'),
             fetchJson<NamedEntity[]>('/api/locations'),
