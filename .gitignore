@@ -62,3 +62,9 @@ coverage/
 #----- Local / sensitive data (never commit) -----
 # Real HR roster is PII — share via password manager, not git
 docs/*.xlsx
+
+# Per-machine MCP server config (local tooling, not project state)
+.mcp.json
+
+# God-agent orchestration playbook — local workflow aid, not project state
+docs/GOD-AGENT-ORCHESTRATION.md
