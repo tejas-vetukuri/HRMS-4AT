@@ -28,7 +28,6 @@ import {
   SearchIcon,
   FingerprintIcon,
   IdCardIcon,
-  BriefcaseIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -58,7 +57,18 @@ interface NavItem {
   /** Only show for users holding at least one of these permission codes. */
   requireAnyPermission?: string[];
   badge?: number;
-  children?: { label: string; href: string }[];
+  children?: NavChild[];
+}
+
+/** A submenu link, optionally gated by the same access rules as a top-level
+ * item, so one menu can hold links that only some roles/permissions can see. */
+interface NavChild {
+  label: string;
+  href: string;
+  roles?: RequiredRole[];
+  requireOrgScope?: boolean;
+  requirePermission?: string;
+  requireAnyPermission?: string[];
 }
 
 const navItems: NavItem[] = [
@@ -88,7 +98,10 @@ const navItems: NavItem[] = [
   },
   { id: 'team', label: 'My Team', icon: TeamIcon, href: '/team', roles: ['admin', 'employee', 'superadmin'] },
   {
-    id: 'org-all',
+    // One Organisation menu; which sub-links show depends on the viewer's
+    // access (directory/chart/documents for everyone, manage + all-employees
+    // only for those with the rights).
+    id: 'org',
     label: 'Organisation',
     icon: GlobeIcon,
     href: '/org',
@@ -96,11 +109,15 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Employee Directory', href: '/org?tab=directory' },
       { label: 'Organisation Chart', href: '/org?tab=chart' },
-      { label: 'Organization Documents', href: '/org?tab=documents' },
+      { label: 'Documents', href: '/org?tab=documents' },
+      {
+        label: 'Manage Structure',
+        href: '/manage-org',
+        requireAnyPermission: ['employees.write', 'org.manage'],
+      },
+      { label: 'All Employees', href: '/employees', roles: ['superadmin'], requireOrgScope: true },
     ],
   },
-  { id: 'org', label: 'Organization', icon: TeamIcon, href: '/employees', roles: ['superadmin'], requireOrgScope: true },
-  { id: 'manage-org', label: 'Manage organisation', icon: BriefcaseIcon, href: '/manage-org', roles: ['admin', 'employee', 'superadmin'], requireAnyPermission: ['employees.write', 'org.manage'] },
   {
     id: 'payroll',
     label: 'Payroll',
@@ -201,14 +218,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const filteredNavItems = navItems.filter(
-    (item) =>
-      !!user &&
-      item.roles.includes(user.role as RequiredRole) &&
-      (!item.requireOrgScope || hasOrgScope()) &&
-      (!item.requirePermission || hasPermission(item.requirePermission)) &&
-      (!item.requireAnyPermission || item.requireAnyPermission.some((code) => hasPermission(code))),
-  );
+  // Shared access test for a top-level item or a submenu child.
+  const canAccess = (rules: {
+    roles?: RequiredRole[];
+    requireOrgScope?: boolean;
+    requirePermission?: string;
+    requireAnyPermission?: string[];
+  }) =>
+    !!user &&
+    (!rules.roles || rules.roles.includes(user.role as RequiredRole)) &&
+    (!rules.requireOrgScope || hasOrgScope()) &&
+    (!rules.requirePermission || hasPermission(rules.requirePermission)) &&
+    (!rules.requireAnyPermission || rules.requireAnyPermission.some((code) => hasPermission(code)));
+
+  const filteredNavItems = navItems.filter(canAccess);
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
@@ -217,7 +240,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const renderNavLink = (item: NavItem) => {
     const Icon = item.icon;
     const active = isActive(item.href);
-    const hasChildren = !!item.children?.length;
+    const visibleChildren = item.children?.filter(canAccess) ?? [];
+    const hasChildren = visibleChildren.length > 0;
     const expanded = expandedId === item.id;
 
     return (
@@ -274,7 +298,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {hasChildren && expanded && !collapsed ? (
           <div className="mt-1 ml-8 space-y-0.5 border-l border-slate-700 pl-3">
-            {item.children!.map((child) => (
+            {visibleChildren.map((child) => (
               <Link
                 key={child.label}
                 href={child.href}
