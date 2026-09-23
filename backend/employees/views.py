@@ -49,6 +49,37 @@ from employees.serializers import (
 )
 
 
+class OrgDirectoryViewSet(FrontendEnvelopeMixin, viewsets.ReadOnlyModelViewSet):
+    """Company-wide, read-only org directory — the source for the Organisation
+    page's chart and directory tabs. Every authenticated user sees the whole
+    company (names, titles, reporting lines), independent of RBAC scope, so the
+    org chart is complete for everyone. Deliberately unscoped: this is directory
+    data, not the sensitive per-employee surface (payroll, personal details,
+    edits) which stays scoped on EmployeeViewSet and the admin endpoints. Reuses
+    EmployeeSerializer (no salary/bank fields) → same {success, data} snake_case
+    shape as /employees. Exited people are excluded so the chart shows the
+    current org."""
+
+    serializer_class = EmployeeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            Employee.objects.select_related(
+                "user",
+                "manager__user",
+                "department",
+                "designation",
+                "location",
+                "legal_entity",
+                "business_unit",
+                "cost_center",
+            )
+            .exclude(status=EmployeeStatus.EXITED)
+            .order_by("user__first_name", "user__last_name")
+        )
+
+
 class EmployeeViewSet(
     FrontendEnvelopeMixin,
     mixins.CreateModelMixin,
