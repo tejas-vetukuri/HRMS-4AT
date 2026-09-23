@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "accounts",
     "employees",
     "audit",
+    # Core primitive 5 (notifications app) — see docs/ARCHITECTURE.md.
+    "notifications",
     # Plug-in modules built on the core.
     "payroll",
     # approvals, notifications, documents, and further plugin apps land here
@@ -99,6 +101,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Notifications primitive (#5): console backend until real SMTP/SES is wired for
+# prod. send_email() is fail-silent regardless (notifications/service.py).
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="no-reply@hrms.local")
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
