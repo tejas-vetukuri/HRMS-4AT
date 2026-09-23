@@ -3,7 +3,7 @@ P1-E1-13 (UserPermissionOverride CRUD), and P1-E4-03 (admin-driven password
 reset). Everything here is gated behind `roles.manage`, a flat capability
 permission (not employee-keyed), via HasPermissionCode, and every mutation
 goes through AuditedModelViewSet (audit/mixins.py) so it lands in the audit
-log — no exceptions, per docs/REQUIREMENTS.md's "audit everything.\""""
+log — no exceptions, per docs/REQUIREMENTS.md's "audit everything.\" """
 
 import secrets
 
@@ -81,7 +81,8 @@ class RolePermissionViewSet(AuditedModelViewSet):
 
 class UserPermissionOverrideViewSet(AuditedModelViewSet):
     """Per-individual grant/restriction beyond a user's role
-    (docs/REQUIREMENTS.md §0). ?user=<id> filters to one person's overrides."""
+    (docs/REQUIREMENTS.md §0). ?user=<id> filters to one person's overrides;
+    ?permission=<id> filters to everyone mapped to one permission."""
 
     queryset = UserPermissionOverride.objects.select_related("user", "permission").all()
     serializer_class = UserPermissionOverrideSerializer
@@ -94,6 +95,9 @@ class UserPermissionOverrideViewSet(AuditedModelViewSet):
         user_id = self.request.query_params.get("user")
         if user_id:
             queryset = queryset.filter(user_id=user_id)
+        permission_id = self.request.query_params.get("permission")
+        if permission_id:
+            queryset = queryset.filter(permission_id=permission_id)
         return queryset
 
     def perform_create(self, serializer):
