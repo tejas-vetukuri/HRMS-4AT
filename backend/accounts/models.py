@@ -19,6 +19,7 @@ class Role(models.Model):
     are seeded defaults, not a hardcoded ceiling — see docs/REQUIREMENTS.md §0."""
 
     name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=255, blank=True)
     archetype = models.CharField(
         max_length=20,
         choices=RoleArchetype.choices,

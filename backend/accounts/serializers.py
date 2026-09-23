@@ -36,6 +36,7 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "description",
             "archetype",
             "is_active",
             "user_count",
