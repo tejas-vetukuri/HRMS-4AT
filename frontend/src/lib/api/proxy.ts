@@ -179,10 +179,15 @@ export function createBackendProxyRoute(
         return resp;
       }
 
-      const resp = NextResponse.json(
-        body ?? { success: false, error: { message: 'Upstream error' } },
-        { status: status || 502 },
-      );
+      // A 204 (e.g. a successful DELETE) has no body, and a Response with a
+      // body and a 204 status is invalid, so it must be passed through empty.
+      const resp =
+        status === 204
+          ? new NextResponse(null, { status: 204 })
+          : NextResponse.json(
+              body ?? { success: false, error: { message: 'Upstream error' } },
+              { status: status || 502 },
+            );
       if (rotated) {
         setAuthCookies(resp, rotated.accessToken, rotated.refreshToken);
       }

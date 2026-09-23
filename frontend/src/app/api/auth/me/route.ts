@@ -2,14 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { proxyToBackend, setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
 import { MOCK_AUTH_ENABLED, MOCK_REFRESH_TOKEN, MOCK_USER } from '@/lib/api/mock-auth';
 
-// The backend now guarantees exactly one primary role per user:
-// Employee | Admin | Super Admin.
-const roleMapping: Record<string, string> = {
-  employee: 'employee',
-  admin: 'admin',
-  'super admin': 'superadmin',
-  superadmin: 'superadmin',
-};
+// Previously this file guessed the frontend archetype from the backend
+// role's free-text *name* via a hardcoded table (`{employee: 'employee',
+// admin: 'admin', 'super admin': 'superadmin'}`). That broke the moment the
+// backend's real role names turned out to be Employee/Manager/HR Admin/Finance
+// (docs/REQUIREMENTS.md §0) instead of Employee/Admin/Super Admin — "manager"
+// and "hr admin" aren't in the table, so both silently fell through to the
+// `|| 'employee'` default, quietly stripping HR Admin and Finance users of
+// their admin/superadmin UI entirely. The backend now sends `roles[0].archetype`
+// explicitly instead (one of exactly the 3 values this frontend understands:
+// employee/admin/superadmin — see backend/core/enums.py's RoleArchetype), so
+// there's no name-guessing table to keep in sync as roles change or new
+// custom roles get created.
+function archetypeFromRoles(roles: { name?: string; archetype?: string }[] | undefined): string {
+  const archetype = roles?.[0]?.archetype;
+  if (archetype === 'admin' || archetype === 'superadmin' || archetype === 'employee') {
+    return archetype;
+  }
+  return 'employee';
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,7 +39,7 @@ export async function GET(req: NextRequest) {
           email: MOCK_USER.email,
           firstName: MOCK_USER.firstName,
           lastName: MOCK_USER.lastName,
-          role: roleMapping[MOCK_USER.roles[0].name] || 'employee',
+          role: archetypeFromRoles(MOCK_USER.roles),
           permissions: MOCK_USER.permissions,
           scope: MOCK_USER.scope,
         },
@@ -57,8 +68,6 @@ export async function GET(req: NextRequest) {
     }
 
     const u = body.data;
-    const backendRole = (u.roles?.[0]?.name || 'employee').toLowerCase();
-    const role = roleMapping[backendRole] || 'employee';
 
     const resp = NextResponse.json({
       success: true,
@@ -67,12 +76,13 @@ export async function GET(req: NextRequest) {
         email: u.email,
         firstName: u.firstName,
         lastName: u.lastName,
-        role,
+        role: archetypeFromRoles(u.roles),
         permissions: u.permissions || [],
         // {kind:'org'} / {kind:'team', employeeIds} / {kind:'self'} - the one
-        // resolved scope value for this user's requests (see backend P2-04).
-        // Falls back to self, matching the backend's own fail-closed default,
-        // for callers against an older backend that doesn't send it yet.
+        // resolved scope value for this user's requests (see backend
+        // core/scope.py::resolve_management_scope). Falls back to self,
+        // matching the backend's own fail-closed default, for callers against
+        // an older backend that doesn't send it yet.
         scope: u.scope || { kind: 'self' },
       },
     });
