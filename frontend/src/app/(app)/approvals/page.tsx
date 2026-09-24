@@ -165,19 +165,22 @@ export default function ApprovalsPage() {
               ))}
             </ul>
           )
-        ) : mine.length === 0 ? (
-          <EmptyState
-            title="You have not raised any requests"
-            body={
-              loadFailed
-                ? 'We could not load requests right now.'
-                : 'Requests you raise (leave, expenses, assets…) will show up here.'
-            }
-            retry={loadFailed ? refresh : undefined}
-          />
         ) : (
-          <ul className="space-y-3">
-            {mine.map((r) => (
+          <div className="space-y-4">
+            <RaiseRequest onCreated={refresh} />
+            {mine.length === 0 ? (
+              <EmptyState
+                title="You have not raised any requests"
+                body={
+                  loadFailed
+                    ? 'We could not load requests right now.'
+                    : 'Requests you raise (leave, expenses, assets…) will show up here.'
+                }
+                retry={loadFailed ? refresh : undefined}
+              />
+            ) : (
+              <ul className="space-y-3">
+                {mine.map((r) => (
               <li key={r.id} className="bg-white border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
@@ -207,10 +210,128 @@ export default function ApprovalsPage() {
                     </button>
                   </div>
                 ) : null}
-              </li>
-            ))}
-          </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const REQUEST_TYPES = ['leave', 'wfh', 'expense', 'asset', 'other'] as const;
+
+function RaiseRequest({ onCreated }: { onCreated: () => Promise<void> | void }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<string>('leave');
+  const [reason, setReason] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload: Record<string, unknown> = {};
+      if (reason.trim()) payload.reason = reason.trim();
+      if (from) payload.from = from;
+      if (to) payload.to = to;
+      await requestsApi.create(type, payload);
+      setReason('');
+      setFrom('');
+      setTo('');
+      setOpen(false);
+      await onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not raise the request. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="px-4 py-2 text-sm font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+      >
+        Raise a request
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+      <p className="text-sm font-semibold text-slate-900">Raise a request</p>
+      {error ? (
+        <p role="alert" className="text-sm text-rose-600">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-3">
+        <label className="text-xs text-slate-500">
+          Type
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="mt-1 block px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl capitalize focus:outline-none focus:bg-white focus:border-slate-300"
+          >
+            {REQUEST_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-slate-500">
+          From
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="mt-1 block px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-slate-300"
+          />
+        </label>
+        <label className="text-xs text-slate-500">
+          To
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="mt-1 block px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-slate-300"
+          />
+        </label>
+      </div>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Reason (optional)"
+        aria-label="Reason"
+        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-slate-300"
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={submit}
+          className="px-4 py-2 text-sm font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        >
+          {submitting ? 'Submitting...' : 'Submit'}
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => setOpen(false)}
+          className="px-4 py-2 text-sm font-semibold rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

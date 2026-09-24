@@ -107,6 +107,18 @@ export const requestsApi = {
     const raw = await request<RawRequest[]>('');
     return (raw ?? []).map(toApprovalRequest);
   },
+  // Raise a request. The backend auto-routes the approver to the requester's
+  // manager; `payload` carries the flow-specific fields (reason, dates, …).
+  create: async (
+    requestType: string,
+    payload: Record<string, unknown>,
+  ): Promise<ApprovalRequest> => {
+    const raw = await request<RawRequest>('', {
+      method: 'POST',
+      body: JSON.stringify({ requestType, payload }),
+    });
+    return toApprovalRequest(raw);
+  },
   approve: async (id: string, note?: string): Promise<ApprovalRequest> => {
     const raw = await request<RawRequest>(`/${id}/approve`, {
       method: 'POST',
