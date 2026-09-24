@@ -28,6 +28,7 @@ import {
   SearchIcon,
   FingerprintIcon,
   IdCardIcon,
+  ClipboardCheckIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -74,6 +75,17 @@ interface NavChild {
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon, href: '/', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'inbox', label: 'Inbox', icon: InboxIcon, href: '/inbox', badge: 5, roles: ['admin', 'employee', 'superadmin'] },
+  {
+    id: 'approvals',
+    label: 'Approvals',
+    icon: ClipboardCheckIcon,
+    href: '/approvals',
+    roles: ['admin', 'employee', 'superadmin'],
+    children: [
+      { label: 'To approve', href: '/approvals?tab=to-approve' },
+      { label: 'My requests', href: '/approvals?tab=mine' },
+    ],
+  },
   { id: 'attendance', label: 'Attendance', icon: CalendarCheckIcon, href: '/attendance', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'leave', label: 'Leave Management', icon: CalendarIcon, href: '/leave', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'timesheet', label: 'Timesheet', icon: TimerIcon, href: '/timesheet', roles: ['admin', 'employee', 'superadmin'] },
@@ -141,6 +153,7 @@ const COLLAPSE_STORAGE_KEY = 'hrms-sidebar-collapsed';
 const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/': { title: 'Home', subtitle: 'Overview of your workday and organization updates' },
   '/inbox': { title: 'Inbox', subtitle: 'Review messages, requests, and notifications that need your attention' },
+  '/approvals': { title: 'Approvals', subtitle: 'Approve requests routed to you and track your own' },
   '/me/attendance': { title: 'Attendance', subtitle: 'Track your attendance, timings, and attendance requests' },
   '/leave': { title: 'Leave Management', subtitle: 'View your leave balance, requests, and time off' },
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
