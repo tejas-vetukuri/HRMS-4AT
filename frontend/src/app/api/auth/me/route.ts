@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
           role: archetypeFromRoles(MOCK_USER.roles),
           permissions: MOCK_USER.permissions,
           scope: MOCK_USER.scope,
+          mustChangePassword: false,
         },
       });
     }
@@ -84,6 +85,10 @@ export async function GET(req: NextRequest) {
         // matching the backend's own fail-closed default, for callers against
         // an older backend that doesn't send it yet.
         scope: u.scope || { kind: 'self' },
+        // Forced temporary-password change gate (T06): an admin-issued
+        // password must be replaced before the user reaches the app.
+        // Defaults to false for older backends that don't send it yet.
+        mustChangePassword: u.mustChangePassword ?? false,
       },
     });
 
