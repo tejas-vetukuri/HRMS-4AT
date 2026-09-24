@@ -10,6 +10,7 @@ from audit.service import write_audit
 from notifications.service import notify
 
 from .models import Request, RequestStatus
+from .signals import request_decided
 
 
 def _approver_for(requester_user):
@@ -49,6 +50,9 @@ def _finalize(request: Request, actor, status: str, note: str) -> Request:
         f"Your {request.request_type} was {status}",
     )
     write_audit(actor, f"Request.{status}", "Request", request.pk, {"note": note or ""})
+    # Let the originating module apply its effect (deduct balance, mark WFH…).
+    # Fired once, after the transition is persisted, so a receiver sees final state.
+    request_decided.send(sender=Request, request=request, actor=actor, status=status)
     return request
 
 

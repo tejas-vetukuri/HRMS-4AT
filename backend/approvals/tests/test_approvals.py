@@ -48,3 +48,43 @@ def test_no_manager_leaves_it_unassigned_for_reassignment():
     service.reassign(req, hr)
     req.refresh_from_db()
     assert req.approver_id == hr.pk
+
+
+@pytest.mark.django_db
+def test_request_decided_signal_fires_once_with_final_state():
+    """A module (leave/attendance) reacts to a decision via request_decided."""
+    from approvals.signals import request_decided
+
+    manager = _user("sm@x.com")
+    mgr_emp = Employee.objects.create(user=manager, employee_code="SM1")
+    requester = _user("sr@x.com")
+    Employee.objects.create(user=requester, employee_code="SR1", manager=mgr_emp)
+
+    seen = []
+    request_decided.connect(
+        lambda sender, request, actor, status, **kw: seen.append(status), weak=False
+    )
+
+    req = service.create_request(requester, "leave", {"days": 2})
+    assert seen == []  # not fired on create
+
+    service.decide(req, manager, RequestStatus.APPROVED, "ok")
+    assert seen == [RequestStatus.APPROVED]  # fired once, with final status
+    req.refresh_from_db()
+    assert req.status == RequestStatus.APPROVED
+
+
+@pytest.mark.django_db
+def test_request_decided_fires_on_withdraw():
+    from approvals.signals import request_decided
+
+    requester = _user("wr@x.com")
+    Employee.objects.create(user=requester, employee_code="WR1")
+    seen = []
+    request_decided.connect(
+        lambda sender, request, actor, status, **kw: seen.append(status), weak=False
+    )
+
+    req = service.create_request(requester, "leave", {})
+    service.withdraw(req, requester)
+    assert seen == [RequestStatus.WITHDRAWN]
