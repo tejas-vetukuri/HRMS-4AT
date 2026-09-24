@@ -128,7 +128,7 @@ export default function OrgPage() {
       try {
         setLoading(true);
         setError(null);
-        const [rawEmployees, departments, businessUnits, locations, costCenters, designations, profile] =
+        const [rawEmployees, departments, businessUnits, locations, costCenters, designations] =
           await Promise.all([
             fetchJson<RawEmployee[]>('/api/org-directory'),
             fetchJson<NamedEntity[]>('/api/departments'),
@@ -136,7 +136,6 @@ export default function OrgPage() {
             fetchJson<NamedEntity[]>('/api/locations'),
             fetchJson<NamedEntity[]>('/api/cost-centers'),
             fetchJson<NamedEntity[]>('/api/designations'),
-            fetchJson<{ id: string }>('/api/ess/profile'),
           ]);
         if (cancelled) return;
         const deptMap = toNameMap(departments);
@@ -145,7 +144,14 @@ export default function OrgPage() {
         const ccMap = toNameMap(costCenters);
         const desigMap = toNameMap(designations);
         setEmployees(rawEmployees.map((e) => toEmployee(e, deptMap, buMap, locMap, ccMap, desigMap)));
-        setMeId(profile.id);
+        // Best-effort: only marks "you" on the chart. An account without an
+        // employee record (e.g. superadmin) has no profile — that must not
+        // blank the directory/chart for everyone else.
+        fetchJson<{ id: string }>('/api/ess/profile')
+          .then((profile) => {
+            if (!cancelled) setMeId(profile.id);
+          })
+          .catch(() => {});
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load organisation data');
       } finally {
