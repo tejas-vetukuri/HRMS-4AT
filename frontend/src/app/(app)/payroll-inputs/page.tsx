@@ -39,10 +39,10 @@ export default function PayrollInputsPage() {
     const load = async () => {
       try {
         const data = await fetchJson<Employee[]>('/api/employees/');
-        setEmployees(data);
-        if (data.length > 0) setSelectedEmployeeId(data[0].id);
+        setEmployees(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) setSelectedEmployeeId(data[0].id);
       } catch (err) {
-        console.error('Failed to load employees');
+        console.error('Failed to load employees:', err instanceof Error ? err.message : err);
       } finally {
         setLoading(false);
       }

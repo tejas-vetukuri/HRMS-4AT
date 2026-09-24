@@ -32,24 +32,23 @@ export default function EmployeeFinancialInfoTab({ employeeId }: Props) {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<PaymentInfo>>({});
 
-  useEffect(() => {
+  const loadPaymentInfo = async () => {
     if (!employeeId) return;
+    try {
+      setLoading(true);
+      const data = await fetchJson<PaymentInfo[]>(
+        `/api/payroll-inputs/payment-info/?employee_id=${employeeId}`
+      );
+      setPaymentInfo(data[0] || null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load payment info');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const loadPaymentInfo = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchJson<PaymentInfo[]>(
-          `/api/payroll-inputs/payment-info/?employee_id=${employeeId}`
-        );
-        setPaymentInfo(data[0] || null);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load payment info');
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     loadPaymentInfo();
   }, [employeeId]);
 
@@ -67,7 +66,7 @@ export default function EmployeeFinancialInfoTab({ employeeId }: Props) {
         method,
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: employeeId, ...formData }),
+        body: JSON.stringify({ employee: employeeId, ...formData }),
       });
 
       const body = await res.json();
@@ -76,7 +75,10 @@ export default function EmployeeFinancialInfoTab({ employeeId }: Props) {
       }
 
       setPaymentInfo(body.data);
+      setFormData({});
       setEditMode(false);
+      // Reload to ensure we have latest data
+      await loadPaymentInfo();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save payment info');
     }

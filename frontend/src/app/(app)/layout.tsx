@@ -34,7 +34,7 @@ type RequiredRole = 'employee' | 'admin' | 'superadmin';
 const roleLabels: Record<RequiredRole, string> = {
   employee: 'Employee',
   admin: 'Manager',
-  superadmin: 'HR Administrator',
+  superadmin: 'Superadmin',
 };
 
 function roleLabel(role?: string) {

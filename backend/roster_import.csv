@@ -1,0 +1,52 @@
+Employee Number,First Name,Last Name,Full Name,Employment Status,Date Joined,Reporting Manager,Reporting Manager Email,Job Title,Department,Sub Department
+4AT0111,Bhavana,Chiriki,Bhavana Chiriki,Working,01-Feb-2024,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,HR Lead,Corporate,HRD
+4AT0070,Bharathi,Aryasomayajula,Bharathi Aryasomayajula,Working,16-Aug-2022,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Finance Executive,Corporate,HRD
+4AT0001,Vandita,Kondapaneni,Vandita Kondapaneni,Working,27-May-2021,Vinita Anand Shastry,vinita.shastry@consult-4at.com,Manager,Audit & Assurance,Venture Captial Audit
+4AT001M,Aruna,Munukutla,Aruna Munukutla,Working,25-Jul-2020,Aruna Munukutla,arunasharma@consult-4at.com,Managing Partner,Management,Management
+4AT002M,Ravi,Krovvidi,Ravi Kumar Krovvidi,Working,25-Jul-2020,Ravi Kumar Krovvidi,ravik@consult-4at.com,Managing Partner,Management,Management
+4AT0011,Vijaya,Parnasala,Vijaya Simha Parnasala,Working,15-Oct-2021,Shashank Bala,shashank@consult-4at.com,Assistant Manager,Audit & Assurance,InfoSec Audit
+4AT0012,Kavya Madhumala,Parupudi,Kavya Madhumala Parupudi,Relieved,26-Jul-2021,Shashank Bala,shashank@consult-4at.com,Senior III,Audit & Assurance,InfoSec Audit
+4AT0016,Jayalakshmi,Mani,Jayalakshmi Mani,Relieved,02-Dec-2021,Vinita Anand Shastry,vinita.shastry@consult-4at.com,Senior I,Accounting,Accounting
+4AT0017C,Shashank,Balabommala,Shashank Balabommala,Working,01-Feb-2021,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Associate Partner,Management,Management
+4AT0021,Vinita,Shastry,Vinita Anand Shastry,Working,03-Jan-2022,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Associate Partner,Management,Management
+4AT0027,Akhila,Yellapantula,Akhila Yellapantula,Relieved,21-Jan-2022,Vandita Kondapaneni,vkondapaneni@consult-4at.com,Senior II,Accounting,Accounting
+4AT0030,Akhila,Anumari,Akhila Anumari,Relieved,02-Feb-2022,Shashank Bala,shashank@consult-4at.com,Senior I,Accounting,Accounting
+4AT0033,Sindhura,Tata,Sindhura Tata,Working,01-Mar-2022,Pragati Lachhiramka,pragati@consult-4at.com,Assistant Manager,Accounting,Accounting
+4AT0036,Alekhya,Vemuri,Alekhya Vemuri,Working,09-Mar-2022,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Manager,Audit & Assurance,SOX/ Design & Implimentation
+4AT0037,Kiran,Vasvani,Kiran Vasvani,Working,27-Jan-2022,Shashank Bala,shashank@consult-4at.com,Assistant Manager,Audit & Assurance,InfoSec Audit
+4AT0038,Pragati,Lachhiramka,Pragati Lachhiramka,Working,21-Dec-2021,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Manager,Accounting,Accounting
+4AT0039,Vivek,Velichala,Vivek Varshith Velichala,Working,01-Mar-2022,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Manager,Accounting,Accounting
+4AT0041,Manisha,Chenabatni,Manisha Chenabatni,Relieved,18-Apr-2022,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0045,Deepika,Mudda,Deepika Mudda,Relieved,16-Mar-2022,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0047,Dinesh,Guttula,Dinesh Guttula,Relieved,01-Feb-2022,Bhavana Chiriki,bchiriki@consult-4at.com,IT Lead,Corporate,Admin
+4AT0049,Yash,Gattani,Yash Gattani,Working,23-May-2022,Vinita Anand Shastry,vinita.shastry@consult-4at.com,Senior III,Audit & Assurance,Venture Captial Audit
+4AT0051,Sri Krishna Kathyayani,Desabhatla,Sri Krishna Kathyayani Desabhatla,Working,01-Jun-2022,Vijaya Simha Parnasala,vparnasala@consult-4at.com,Senior II,Audit & Assurance,InfoSec Audit
+4AT0063,Kirloskar,Dhadi,Kirloskar Dhadi,Working,25-Apr-2022,Vivek Varshith Velichala,vivek@consult-4at.com,Senior II,Audit & Assurance,Venture Captial Audit
+4AT0065,Sudarshan,Dadhich,Sudarshan Dadhich,Working,01-Jul-2022,Vetukuri Prudvi Raju,prudviraju@consult-4at.com,Talent Acquisition Lead,Corporate,Talent Acquisition Lead
+4AT0067,Kaushik,Kulpagiri,Kaushik Gourav Kulpagiri,Working,01-Aug-2022,Alekhya Vemuri,alekhyavemuri@consult-4at.com,Senior II,Audit & Assurance,SOX/ Design & Implimentation
+4AT0068,Bhargavi,Boyapati,Bhargavi Boyapati,Working,08-Aug-2022,Kiran Vasvani,kiranv@consult-4at.com,Senior II,Audit & Assurance,InfoSec Audit
+4AT0072,Vaishnavi,Gandhe,Vaishnavi Gandhe,Relieved,01-Sep-2022,Shashank Bala,shashank@consult-4at.com,Senior Staff,Audit & Assurance,Senior Staff
+4AT0073,Venkateswara Rao,Kollu,Venkateswara Rao Kollu,Relieved,01-Sep-2022,Vivek Varshith Velichala,vivek@consult-4at.com,Senior I,Accounting,Accounting
+4AT0076,Meghana,Nadiminti,Meghana Lakshmi Nadiminti,Working,03-Oct-2022,Vinita Anand Shastry,vinita.shastry@consult-4at.com,Senior III,Audit & Assurance,Venture Captial Audit
+4AT0078,Abdul,Faisal,Abdul Faisal,Relieved,07-Nov-2022,Bhavana Chiriki,bchiriki@consult-4at.com,Senior Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0079,Manoj,Arramshetty,Manoj Naidu Arramshetty,Working,07-Nov-2022,Sidhardha Nvn,sindhura@consult-4at.com,Senior I,Accounting,Accounting
+4AT0080,Vatan,Mithawala,Vatan Prajwal Mithawala,Relieved,21-Nov-2022,Bhavana Chiriki,bchiriki@consult-4at.com,Senior Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0082,Chandra,Garimilla,Chandra Sekhar Garimilla,Relieved,01-Mar-2021,Ravi Kumar Krovvidi,ravik@consult-4at.com,Senior Manager,Accounting,Accounting
+4AT0086,Vijay Kumar,Kuruba,Vijay Kumar Kuruba,Relieved,01-Apr-2022,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Corporate,Staff
+4AT0088,Akhil,Vudayagiri,Akhil Vudayagiri,Working,13-Mar-2023,Vijaya Simha Parnasala,vparnasala@consult-4at.com,Senior I,Audit & Assurance,Senior I
+4AT0089,Tejas,Lachhiramka,Tejas Lachhiramka,Relieved,03-Apr-2023,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0091,Sai,Chikka,Sai Bhargav Chikka,Relieved,15-Apr-2023,Shashank Bala,shashank@consult-4at.com,Manager,Technology,Manager
+4AT0094,Nirnay,Verma,Nirnay Verma,Relieved,03-May-2023,Bhavana Chiriki,bchiriki@consult-4at.com,Senior Manager,Corporate,Senior Manager
+4AT0095,Payal,Jangid,Payal Jangid,Working,15-May-2023,Kiran Vasvani,kiranv@consult-4at.com,Senior I,Audit & Assurance,Senior I
+4AT0098,Manikyeshwar Rao,Merneddi,Manikyeshwar Rao Merneddi,Working,21-Jun-2023,Rajesh Vennapureddy,rvennapureddy@consult-4at.com,Senior II,Accounting,Accounting
+4AT0099,Venkata Neelasree,Bulusu,Venkata Neelasree Bulusu,Relieved,21-Jun-2023,Alekhya Vemuri,alekhyavemuri@consult-4at.com,Senior II,Audit & Assurance,Senior II
+4AT0100,Surya Teja,Sabbavarapu,Surya Teja Sabbavarapu,Working,07-Dec-2023,Pragati Lachhiramka,pragati@consult-4at.com,Assistant Manager,Accounting,Accounting
+4AT0101,Aman,.,Aman .,Relieved,18-Dec-2023,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Bench (Unassigned),Trainee
+4AT0104,Rebha,V,Rebha V,Relieved,22-Jan-2024,Shashank Bala,shashank@consult-4at.com,Staff Accounting,Accounting,Staff
+4AT0105,Nanepalli,Tejaswi,Nanepalli Tejaswi,Working,22-Jan-2024,Vijaya Simha Parnasala,vparnasala@consult-4at.com,Senior I,Audit & Assurance,Senior I
+4AT0106,Likitha,Akula,Likitha Akula,Relieved,22-Jan-2024,Vivek Varshith Velichala,vivek@consult-4at.com,Staff,Accounting,Staff
+4AT0107,Siddhant,Chauhan,Siddhant Chauhan,Relieved,22-Jan-2024,Aruna Munukutla,arunasharma@consult-4at.com,Staff,Audit & Assurance,Staff
+4AT0108,Ramesh,Reddy,Ramesh Chandra Reddy,Relieved,22-Jan-2024,Bhavana Chiriki,bchiriki@consult-4at.com,Staff,Recruitment Counsulting,Recruitment Counsulting
+4AT0110,Tohid,Popatiya,Tohid Mansur Popatiya,Working,01-Feb-2024,Alekhya Vemuri,alekhyavemuri@consult-4at.com,Senior III,Audit & Assurance,Senior III
+4AT0112,Maitreyi,Sistla,Maitreyi Sistla,Working,01-Feb-2024,Alekhya Vemuri,alekhyavemuri@consult-4at.com,Senior Staff,Audit & Assurance,Senior Staff
+4AT0113,Vineetha,Challa,Vineetha Challa,Working,26-Feb-2024,Kiran Vasvani,kiranv@consult-4at.com,Senior I,Audit & Assurance,Senior I
