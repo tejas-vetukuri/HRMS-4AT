@@ -28,3 +28,17 @@ data is RBAC-scoped like every other module and it passes its own live verificat
 (a conformance test via `core.testing.assert_module_conforms`) passes.
 
 **Status:** ☑ merged — verify_payroll 25/25, conformance 2/2 (done directly by god after worker pipeline failed on token economics)
+
+## [APP-3] Approvals inbox (frontend)
+
+**Goal:** Give approvers and requesters a UI for the approvals engine — see requests to act on, approve/reject with a note, see your own requests and withdraw them.
+
+**Manual check (for the human):**
+1. As a manager with a pending request routed to you, open Approvals → "To approve". The request shows requester, type, payload summary, date. Click Approve (add a note) → row moves to resolved, requester gets a bell notification.
+2. Click Reject on another → same, status shows rejected with the note.
+3. As the requester, open "My requests" → see your raised requests with status; Withdraw a pending one → status becomes withdrawn.
+4. A user with no requests and none to approve sees empty states, not an error.
+
+**Automated check:** frontend typecheck + lint clean (`npx tsc --noEmit`, the repo's eslint). Backend already tested (approvals/tests). Worker adds the `/api/requests` proxy route and confirms it reaches `api/v1/requests`.
+
+**Status:** ☐ not started · ☑ in worker · ☐ in test · ☐ failed · ☐ merged
