@@ -93,6 +93,12 @@ class User(AbstractUser):
     role = models.ForeignKey(
         Role, null=True, blank=True, on_delete=models.PROTECT, related_name="users"
     )
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text="True when an admin has issued a temporary password: "
+        "the user must change it (POST users/me/change-password) before "
+        "using the app.",
+    )
 
     def __str__(self):
         return self.get_username()

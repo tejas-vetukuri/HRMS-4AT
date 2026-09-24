@@ -244,6 +244,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, isLoading, router]);
 
+  // Forced temporary-password change (T06): a user with the flag set stays
+  // on the change-password screen until the flag clears — nothing else in
+  // the app is reachable.
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.mustChangePassword) {
+      router.push('/change-password');
+    }
+  }, [isAuthenticated, isLoading, user, router]);
+
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [pathname]);

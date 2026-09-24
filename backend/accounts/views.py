@@ -252,7 +252,8 @@ class UserViewSet(
         user = self.get_object()
         new_password = secrets.token_urlsafe(12)
         user.set_password(new_password)
-        user.save(update_fields=["password"])
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
 
         write_audit(request.user, "User.password_reset", "User", user.pk)
         return Response({"success": True, "data": {"temporaryPassword": new_password}})
