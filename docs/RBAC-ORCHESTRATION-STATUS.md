@@ -16,3 +16,7 @@ Notes:
   workers are isolated Claude workers.
 - Git rule enforced: author Nandini Velamuri <krishnanandiniv@gmail.com>, no AI
   mention / co-author trailer in any commit (§8).
+| APP-4 | done | RBAC | god (self) | 0 | b8f577c |
+| APP-5 | done (report: verify_approvals 15/15, gitignored artifact) | RBAC | god (self) | 0 | — |
+| APP-6 | blocked (needs running full stack) | — | — | 0 | — |
+| APP-7 | blocked (git push — user re-auth) | — | — | 0 | — |
