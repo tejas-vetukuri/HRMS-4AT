@@ -41,4 +41,4 @@ data is RBAC-scoped like every other module and it passes its own live verificat
 
 **Automated check:** frontend typecheck + lint clean (`npx tsc --noEmit`, the repo's eslint). Backend already tested (approvals/tests). Worker adds the `/api/requests` proxy route and confirms it reaches `api/v1/requests`.
 
-**Status:** ☐ not started · ☑ in worker · ☐ in test · ☐ failed · ☐ merged
+**Status:** ☑ merged (604eb84) — tester PASS
