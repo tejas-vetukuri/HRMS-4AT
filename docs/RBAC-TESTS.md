@@ -42,3 +42,19 @@ data is RBAC-scoped like every other module and it passes its own live verificat
 **Automated check:** frontend typecheck + lint clean (`npx tsc --noEmit`, the repo's eslint). Backend already tested (approvals/tests). Worker adds the `/api/requests` proxy route and confirms it reaches `api/v1/requests`.
 
 **Status:** ☑ merged (604eb84) — tester PASS
+
+## [T06] Forced password change on first login (admin-set temp password model)
+
+Decision (2026-09-24): admin issues a temporary password; employee is forced to
+change it on first login. Email invites and SSO are out of scope for T06.
+
+Acceptance:
+1. `User.must_change_password` (Boolean, default False) exists + migration applied.
+2. Admin `POST users/{id}/reset-password` sets `must_change_password=True`.
+3. Login response and `GET users/me` include `mustChangePassword` (camelCase).
+4. `POST users/me/change-password` sets `must_change_password=False` on success.
+5. A user with `must_change_password=True` who calls change-password successfully
+   ends with the flag cleared and a working new password.
+6. Frontend: when `mustChangePassword` is true after login, the user is routed to
+   the change-password screen and cannot reach the app until they change it.
+7. New backend tests cover 2/3/4/5; existing accounts/verify_rbac tests still pass.
