@@ -110,43 +110,30 @@ const navItems: NavItem[] = [
   },
   { id: 'team', label: 'My Team', icon: TeamIcon, href: '/team', roles: ['admin', 'employee', 'superadmin'] },
   {
-    // One Organisation menu; which sub-links show depends on the viewer's
-    // access (directory/chart/documents for everyone, manage + all-employees
-    // only for those with the rights).
+    // Single Org menu: the live people pages (directory/chart/documents from
+    // /org) folded together with the Org module sections (/org-module). Which
+    // sub-links show still depends on the viewer's access.
     id: 'org',
-    label: 'Organisation',
-    icon: GlobeIcon,
-    href: '/org',
-    roles: ['admin', 'employee', 'superadmin'],
-    children: [
-      { label: 'Employee Directory', href: '/org?tab=directory' },
-      { label: 'Organisation Chart', href: '/org?tab=chart' },
-      { label: 'Documents', href: '/org?tab=documents' },
-      {
-        label: 'Manage Structure',
-        href: '/manage-org',
-        requireAnyPermission: ['employees.write', 'org.manage'],
-      },
-      { label: 'All Employees', href: '/employees', roles: ['superadmin'], requireOrgScope: true },
-    ],
-  },
-  {
-    // Org module (Phase 1, frontend mock): overview dashboard, structure
-    // masters and stubs for the remaining sections. The older 'Organisation'
-    // item above keeps the live directory/chart; this one is the new module.
-    id: 'org-module',
     label: 'Org',
     icon: GlobeIcon,
     href: '/org-module',
     roles: ['admin', 'employee', 'superadmin'],
     children: [
       { label: 'Overview', href: '/org-module' },
-      { label: 'Employees', href: '/org-module/employees' },
+      { label: 'Employee Directory', href: '/org?tab=directory' },
+      { label: 'Organisation Chart', href: '/org?tab=chart' },
+      { label: 'Documents', href: '/org?tab=documents' },
       { label: 'Org Structure', href: '/org-module/legal-entities' },
       { label: 'Job Architecture', href: '/org-module/job-families' },
       { label: 'Onboarding', href: '/org-module/preboarding' },
       { label: 'Org Changes', href: '/org-module/promotions' },
       { label: 'Settings', href: '/org-module/org-configuration' },
+      {
+        label: 'Manage Structure',
+        href: '/manage-org',
+        requireAnyPermission: ['employees.write', 'org.manage'],
+      },
+      { label: 'All Employees', href: '/employees', roles: ['superadmin'], requireOrgScope: true },
     ],
   },
   {
