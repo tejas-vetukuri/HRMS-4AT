@@ -111,8 +111,10 @@ const navItems: NavItem[] = [
   { id: 'team', label: 'My Team', icon: TeamIcon, href: '/team', roles: ['admin', 'employee', 'superadmin'] },
   {
     // Single Org menu: the live people pages (directory/chart/documents from
-    // /org) folded together with the Org module sections (/org-module). Which
-    // sub-links show still depends on the viewer's access.
+    // /org) folded together with the Org module sections (/org-module). The
+    // directory at /org?tab=directory is the one canonical employee list —
+    // /employees redirects there. Which sub-links show still depends on the
+    // viewer's access.
     id: 'org',
     label: 'Org',
     icon: GlobeIcon,
@@ -133,7 +135,6 @@ const navItems: NavItem[] = [
         href: '/manage-org',
         requireAnyPermission: ['employees.write', 'org.manage'],
       },
-      { label: 'All Employees', href: '/employees', roles: ['superadmin'], requireOrgScope: true },
     ],
   },
   {
@@ -164,7 +165,6 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/leave': { title: 'Leave Management', subtitle: 'View your leave balance, requests, and time off' },
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
   '/team': { title: 'My Team', subtitle: 'View your team, schedules, and workplace activity' },
-  '/employees': { title: 'Organization', subtitle: 'Manage employees and organizational documents' },
   '/manage-org': { title: 'Manage organisation', subtitle: 'Employees, reporting lines and the organisation structure' },
   '/admin': { title: 'Access control', subtitle: 'Manage roles, permissions, people and the activity log' },
   '/org': { title: 'Organisation', subtitle: 'Browse the employee directory and organisation chart' },
