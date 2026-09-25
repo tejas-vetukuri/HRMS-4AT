@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "documents",
     # Plug-in modules built on the core.
     "payroll",
+    "onboarding",
     # approvals, notifications, documents, and further plugin apps land here
     # as Phase 0/2/3+ scaffolding proceeds (docs/TASKS.md P0-E1-03/04).
 ]
@@ -115,6 +116,9 @@ EMAIL_BACKEND = env(
     "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="no-reply@hrms.local")
+# Display name used in email templates (notifications/utils.py renders it into
+# every HTML email context as `company_name`). Overridable via env.
+COMPANY_NAME = env("COMPANY_NAME", default="4AT HRMS")
 # Real delivery: set DJANGO_EMAIL_BACKEND to the SMTP backend and fill these in
 # (env). Left blank the console backend prints emails to the server log instead.
 EMAIL_HOST = env("EMAIL_HOST", default="")
