@@ -25,7 +25,6 @@ import {
   PanelLeftOpenIcon,
   SearchIcon,
   IdCardIcon,
-  ClipboardCheckIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -127,26 +126,12 @@ const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon, href: '/', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'inbox', label: 'Inbox', icon: InboxIcon, href: '/inbox', badge: 5, roles: ['admin', 'employee', 'superadmin'] },
   {
-    // Cross-module inbox (backend/approvals) - the single surface for every
-    // raise-a-request/approve/reject flow, including (once wired) Attendance
-    // & Leave's WFH/regularisation/leave requests. Not nested under
-    // Attendance since it's no longer an Attendance-specific concern.
-    id: 'approvals',
-    label: 'Approvals',
-    icon: ClipboardCheckIcon,
-    href: '/approvals',
-    roles: ['admin', 'employee', 'superadmin'],
-    children: [
-      { label: 'To approve', href: '/approvals?tab=to-approve' },
-      { label: 'My requests', href: '/approvals?tab=mine' },
-      // Penalisation has no equivalent in the generic engine (it auto-applies
-      // rather than being raised/routed) - kept as its own tab on the same
-      // page rather than ported onto requestsApi. See
-      // docs/LEAVE-ATTENDANCE-INTEGRATION.md and approvals/page.tsx.
-      { label: 'Penalisation', href: '/approvals?tab=penalisation' },
-    ],
-  },
-  {
+    // Approvals lives under Attendance, not as its own top-level item - it's
+    // a review surface for WFH/Regularisation/Leave/Penalisation, each its
+    // own in-page tab (approvals/page.tsx's own SectionTabs), not a
+    // cross-module inbox. Employees who can't approve anything never see it
+    // (that page redirects them away) - self-service raise/cancel of their
+    // own requests lives on the Leave/My Attendance pages instead, not here.
     id: 'attendance',
     label: 'Attendance',
     icon: CalendarCheckIcon,
@@ -159,6 +144,11 @@ const navItems: NavItem[] = [
         requireAnyPermission: ['leave.approve', 'attendance.approve', 'scope.all'],
       },
       { label: 'My Attendance', href: '/attendance', matchPrefixes: ['/attendance', '/me/attendance', '/leave'] },
+      {
+        label: 'Approvals',
+        href: '/approvals',
+        requireAnyPermission: ['leave.approve', 'attendance.approve'],
+      },
       { label: 'Settings', href: '/attendance/settings', requireAnyPermission: ['attendance.settings.manage', 'calendar.manage'] },
     ],
   },
@@ -227,7 +217,7 @@ const COLLAPSE_STORAGE_KEY = 'hrms-sidebar-collapsed';
 const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/': { title: 'Home', subtitle: 'Overview of your workday and organization updates' },
   '/inbox': { title: 'Inbox', subtitle: 'Review messages, requests, and notifications that need your attention' },
-  '/approvals': { title: 'Approvals', subtitle: 'Approve requests routed to you and track your own' },
+  '/approvals': { title: 'Approvals', subtitle: 'Review WFH, regularisation, leave, and penalisation requests routed to you' },
   '/me/attendance': { title: 'Attendance', subtitle: 'Track your attendance, timings, and attendance requests' },
   '/leave': { title: 'Leave Management', subtitle: 'View your leave balance, requests, and time off' },
   '/attendance/dashboard': { title: 'Dashboard', subtitle: 'Attendance and leave analytics for your team or organisation' },
