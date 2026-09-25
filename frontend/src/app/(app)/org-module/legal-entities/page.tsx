@@ -2,23 +2,30 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/useAuth';
-import { orgApi } from '@/lib/api/org';
-import type { LegalEntity } from '@/lib/mock/org/types';
-import { MasterTable, PageHeader, StatusPill, type FieldDef } from '@/components/org-module/ui';
+import { adminEmployeeCount, adminIsActive, adminRowId, orgAdminApi, orgApi } from '@/lib/api/org';
+import { ManageTable, type ManageField } from '@/components/org-module/manage-table';
+import { StatusPill } from '@/components/org-module/ui';
 
-const fields: FieldDef[] = [
+interface Row {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  registrationNo: string;
+  head: string;
+  employees: number;
+  status: 'Active' | 'Inactive';
+}
+
+const fields: ManageField[] = [
   { name: 'name', label: 'Legal entity name', placeholder: 'e.g. Acme Technologies Pvt Ltd' },
-  { name: 'code', label: 'Code', placeholder: 'e.g. IN-LE-01' },
-  { name: 'country', label: 'Country', type: 'select', options: ['India', 'United States'] },
-  { name: 'registrationNo', label: 'Registration no.', placeholder: 'CIN / EIN' },
-  { name: 'head', label: 'Head', placeholder: 'Entity head' },
 ];
 
 export default function LegalEntitiesPage() {
   const { hasPermission } = useAuth();
-  const canManage = hasPermission('org.manage') || hasPermission('employees.write');
+  const canManage = hasPermission('org.manage');
 
-  const [rows, setRows] = useState<LegalEntity[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -26,23 +33,46 @@ export default function LegalEntitiesPage() {
     setLoading(true);
     setLoadFailed(false);
     try {
-      const [entities, employees] = await Promise.all([
-        orgApi.listLegalEntities(),
-        orgApi.listEmployees(),
-      ]);
-      setRows(
-        entities.map((e) => ({
-          id: e.id,
-          name: e.name,
-          // The reference table stores names only — no code/country/head yet.
-          code: '—',
-          country: '—',
-          registrationNo: '—',
-          head: '—',
-          employees: employees.filter((emp) => emp.legal_entity_id === e.id).length,
-          status: 'Active',
-        }) as LegalEntity),
-      );
+      if (canManage) {
+        const [entities, employees] = await Promise.all([
+          orgAdminApi.list('legal-entities'),
+          orgApi.listEmployees(),
+        ]);
+        const counts = new Map<string, number>();
+        for (const emp of employees) {
+          if (emp.legal_entity_id) counts.set(emp.legal_entity_id, (counts.get(emp.legal_entity_id) ?? 0) + 1);
+        }
+        setRows(
+          entities.map((e) => ({
+            id: adminRowId(e),
+            name: e.name,
+            // The reference table stores names only — no code/country/head yet.
+            code: '—',
+            country: '—',
+            registrationNo: '—',
+            head: '—',
+            employees: counts.get(adminRowId(e)) ?? adminEmployeeCount(e),
+            status: adminIsActive(e) ? 'Active' : 'Inactive',
+          })),
+        );
+      } else {
+        const [entities, employees] = await Promise.all([
+          orgApi.listLegalEntities(),
+          orgApi.listEmployees(),
+        ]);
+        setRows(
+          entities.map((e) => ({
+            id: e.id,
+            name: e.name,
+            code: '—',
+            country: '—',
+            registrationNo: '—',
+            head: '—',
+            employees: employees.filter((emp) => emp.legal_entity_id === e.id).length,
+            status: 'Active',
+          })),
+        );
+      }
     } catch {
       // Never an error screen: empty table with a retry affordance.
       setRows([]);
@@ -50,61 +80,45 @@ export default function LegalEntitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Legal Entities" subtitle="Loading…" />
-        <div className="bg-white border border-slate-200 rounded-xl p-5 animate-pulse">
-          <div className="h-4 w-1/3 bg-slate-100 rounded" />
-          <div className="mt-3 space-y-2">
-            <div className="h-8 bg-slate-50 rounded" />
-            <div className="h-8 bg-slate-50 rounded" />
-            <div className="h-8 bg-slate-50 rounded" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {loadFailed ? (
-        <div className="mb-4 flex items-center justify-between gap-3 flex-wrap bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-sm text-amber-800">
-            Couldn&apos;t reach the server — showing no records.
-          </p>
-          <button
-            type="button"
-            onClick={refresh}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      ) : null}
-      <MasterTable<LegalEntity>
-        title="Legal Entities"
-        subtitle="Live names and headcount from the server; codes and heads are not stored by the backend yet (stub actions)."
-        rows={rows}
-        fields={fields}
-        addLabel="Add legal entity"
-        canManage={canManage}
-        searchPlaceholder="Search by name, code or country…"
-        columns={[
-          { key: 'name', label: 'Entity' },
-          { key: 'code', label: 'Code' },
-          { key: 'country', label: 'Country' },
-          { key: 'head', label: 'Head' },
-          { key: 'employees', label: 'Employees' },
-          { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
-        ]}
-      />
-    </div>
+    <ManageTable<Row>
+      title="Legal Entities"
+      subtitle="Live names and headcount from the server; codes, countries and heads are not stored by the backend yet."
+      rows={rows}
+      fields={fields}
+      addLabel="Add legal entity"
+      canManage={canManage}
+      loading={loading}
+      loadFailed={loadFailed}
+      onRetry={refresh}
+      searchPlaceholder="Search by name…"
+      columns={[
+        { key: 'name', label: 'Legal entity' },
+        { key: 'code', label: 'Code' },
+        { key: 'country', label: 'Country' },
+        { key: 'registrationNo', label: 'Registration no.' },
+        { key: 'head', label: 'Head' },
+        { key: 'employees', label: 'Employees' },
+        { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
+      ]}
+      onAdd={async (v) => {
+        await orgAdminApi.create('legal-entities', { name: v.name.trim() });
+        await refresh();
+      }}
+      onEdit={async (row, v) => {
+        await orgAdminApi.update('legal-entities', row.id, { name: v.name.trim() });
+        await refresh();
+      }}
+      onDeactivate={async (row) => {
+        await orgAdminApi.deactivate('legal-entities', row.id);
+        await refresh();
+      }}
+    />
   );
 }

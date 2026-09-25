@@ -1,28 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth/useAuth';
-import { orgApi } from '@/lib/api/org';
-import type { Department } from '@/lib/mock/org/types';
-import { MasterTable, PageHeader, StatusPill, type FieldDef } from '@/components/org-module/ui';
+import { adminIsActive, adminRowId, orgAdminApi, orgApi } from '@/lib/api/org';
+import { ManageTable, type ManageField } from '@/components/org-module/manage-table';
+import { StatusPill } from '@/components/org-module/ui';
 
-const fields: FieldDef[] = [
-  { name: 'name', label: 'Department name', placeholder: 'e.g. Engineering' },
-  { name: 'code', label: 'Code', placeholder: 'e.g. DEPT-ENG' },
-  {
-    name: 'parent',
-    label: 'Parent business unit',
-    type: 'select',
-    options: ['Product & Engineering', 'Consulting Services', 'Corporate'],
-  },
-  { name: 'head', label: 'Department head', placeholder: 'e.g. Arjun Mehta' },
-];
+interface Row {
+  id: string;
+  name: string;
+  code: string;
+  parent: string;
+  parentId: string;
+  head: string;
+  teams: number;
+  employees: number;
+  status: 'Active' | 'Inactive';
+}
 
 export default function DepartmentsPage() {
   const { hasPermission } = useAuth();
-  const canManage = hasPermission('org.manage') || hasPermission('employees.write');
+  const canManage = hasPermission('org.manage');
 
-  const [rows, setRows] = useState<Department[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [parentOptions, setParentOptions] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -30,23 +31,54 @@ export default function DepartmentsPage() {
     setLoading(true);
     setLoadFailed(false);
     try {
-      const [depts, employees] = await Promise.all([
-        orgApi.listDepartments(),
-        orgApi.listEmployees(),
-      ]);
-      setRows(
-        depts.map((d) => ({
-          id: d.id,
-          name: d.name,
-          code: '—',
-          parent: '—',
-          head: '—',
-          // No team registry on the backend yet — teams are visible on the Teams screen.
-          teams: 0,
-          employees: employees.filter((emp) => emp.department_id === d.id).length,
-          status: 'Active',
-        }) as Department),
-      );
+      if (canManage) {
+        const [depts, employees] = await Promise.all([
+          orgAdminApi.list('departments'),
+          orgApi.listEmployees(),
+        ]);
+        const names = new Map(depts.map((d) => [adminRowId(d), d.name]));
+        const counts = new Map<string, number>();
+        for (const emp of employees) {
+          if (emp.department_id) counts.set(emp.department_id, (counts.get(emp.department_id) ?? 0) + 1);
+        }
+        setParentOptions(depts.map((d) => ({ value: adminRowId(d), label: d.name })));
+        setRows(
+          depts.map((d) => {
+            const id = adminRowId(d);
+            const parentId = d.parent === null || d.parent === undefined ? '' : String(d.parent);
+            return {
+              id,
+              name: d.name,
+              code: '—',
+              parent: (d.parentName ?? (parentId ? names.get(parentId) : undefined) ?? '—') || '—',
+              parentId,
+              head: '—',
+              teams: 0,
+              employees: counts.get(id) ?? 0,
+              status: adminIsActive(d) ? 'Active' : 'Inactive',
+            };
+          }),
+        );
+      } else {
+        const [depts, employees] = await Promise.all([
+          orgApi.listDepartments(),
+          orgApi.listEmployees(),
+        ]);
+        setParentOptions([]);
+        setRows(
+          depts.map((d) => ({
+            id: d.id,
+            name: d.name,
+            code: '—',
+            parent: '—',
+            parentId: '',
+            head: '—',
+            teams: 0,
+            employees: employees.filter((emp) => emp.department_id === d.id).length,
+            status: 'Active',
+          })),
+        );
+      }
     } catch {
       // Never an error screen: empty table with a retry affordance.
       setRows([]);
@@ -54,62 +86,59 @@ export default function DepartmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Departments" subtitle="Loading…" />
-        <div className="bg-white border border-slate-200 rounded-xl p-5 animate-pulse">
-          <div className="h-4 w-1/3 bg-slate-100 rounded" />
-          <div className="mt-3 space-y-2">
-            <div className="h-8 bg-slate-50 rounded" />
-            <div className="h-8 bg-slate-50 rounded" />
-            <div className="h-8 bg-slate-50 rounded" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const fields: ManageField[] = useMemo(
+    () => [
+      { name: 'name', label: 'Department name', placeholder: 'e.g. Engineering' },
+      { name: 'parent', label: 'Parent department', type: 'select', options: parentOptions },
+    ],
+    [parentOptions],
+  );
 
   return (
-    <div>
-      {loadFailed ? (
-        <div className="mb-4 flex items-center justify-between gap-3 flex-wrap bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-sm text-amber-800">
-            Couldn&apos;t reach the server — showing no records.
-          </p>
-          <button
-            type="button"
-            onClick={refresh}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      ) : null}
-      <MasterTable<Department>
-        title="Departments"
-        subtitle="Live names and headcount from the server; codes, parents and heads are not stored by the backend yet (stub actions)."
-        rows={rows}
-        fields={fields}
-        addLabel="Add department"
-        canManage={canManage}
-        searchPlaceholder="Search by name, code, parent or head…"
-        columns={[
-          { key: 'name', label: 'Department' },
-          { key: 'code', label: 'Code' },
-          { key: 'parent', label: 'Parent unit' },
-          { key: 'head', label: 'Head' },
-          { key: 'teams', label: 'Teams' },
-          { key: 'employees', label: 'Employees' },
-          { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
-        ]}
-      />
-    </div>
+    <ManageTable<Row>
+      title="Departments"
+      subtitle="Live names and headcount from the server; codes and heads are not stored by the backend yet."
+      rows={rows}
+      fields={fields}
+      addLabel="Add department"
+      canManage={canManage}
+      loading={loading}
+      loadFailed={loadFailed}
+      onRetry={refresh}
+      searchPlaceholder="Search by name or parent…"
+      columns={[
+        { key: 'name', label: 'Department' },
+        { key: 'code', label: 'Code' },
+        { key: 'parent', label: 'Parent unit' },
+        { key: 'head', label: 'Head' },
+        { key: 'teams', label: 'Teams' },
+        { key: 'employees', label: 'Employees' },
+        { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
+      ]}
+      onAdd={async (v) => {
+        await orgAdminApi.create('departments', {
+          name: v.name.trim(),
+          parent: v.parent || null,
+        });
+        await refresh();
+      }}
+      onEdit={async (row, v) => {
+        await orgAdminApi.update('departments', row.id, {
+          name: v.name.trim(),
+          parent: v.parent || null,
+        });
+        await refresh();
+      }}
+      onDeactivate={async (row) => {
+        await orgAdminApi.deactivate('departments', row.id);
+        await refresh();
+      }}
+    />
   );
 }
