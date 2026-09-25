@@ -25,7 +25,7 @@ import {
   PanelLeftOpenIcon,
   SearchIcon,
   IdCardIcon,
-  BriefcaseIcon,
+  ClipboardCheckIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -55,15 +55,23 @@ interface NavItem {
   /** Only show for users holding at least one of these permission codes. */
   requireAnyPermission?: string[];
   badge?: number;
-  children?: {
-    label: string;
-    href: string;
-    anyPermission?: string[];
-    /** Extra path prefixes (besides `href`'s own path) that should also count
-     * as "on this child" for tab-highlighting - e.g. My Attendance also owns
-     * /leave, since AttendanceLeaveTabs links out to it directly. */
-    matchPrefixes?: string[];
-  }[];
+  children?: NavChild[];
+}
+
+/** A submenu link. Optionally gated by the same access rules as a top-level
+ * item (`roles`/`requireOrgScope`/`requirePermission`/`requireAnyPermission`),
+ * so one menu can hold links that only some roles/permissions can see (e.g.
+ * Organisation's "All Employees" is superadmin+org-scope only). Separately,
+ * `matchPrefixes` extends which URLs count as "on this child" for
+ * tab-highlighting - e.g. My Attendance also owns /leave and /me/attendance. */
+interface NavChild {
+  label: string;
+  href: string;
+  roles?: RequiredRole[];
+  requireOrgScope?: boolean;
+  requirePermission?: string;
+  requireAnyPermission?: string[];
+  matchPrefixes?: string[];
 }
 
 /** Is `pathname`(+`search`) the target of a nav child's `href`? Handles both
@@ -119,6 +127,26 @@ const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon, href: '/', roles: ['admin', 'employee', 'superadmin'] },
   { id: 'inbox', label: 'Inbox', icon: InboxIcon, href: '/inbox', badge: 5, roles: ['admin', 'employee', 'superadmin'] },
   {
+    // Cross-module inbox (backend/approvals) - the single surface for every
+    // raise-a-request/approve/reject flow, including (once wired) Attendance
+    // & Leave's WFH/regularisation/leave requests. Not nested under
+    // Attendance since it's no longer an Attendance-specific concern.
+    id: 'approvals',
+    label: 'Approvals',
+    icon: ClipboardCheckIcon,
+    href: '/approvals',
+    roles: ['admin', 'employee', 'superadmin'],
+    children: [
+      { label: 'To approve', href: '/approvals?tab=to-approve' },
+      { label: 'My requests', href: '/approvals?tab=mine' },
+      // Penalisation has no equivalent in the generic engine (it auto-applies
+      // rather than being raised/routed) - kept as its own tab on the same
+      // page rather than ported onto requestsApi. See
+      // docs/LEAVE-ATTENDANCE-INTEGRATION.md and approvals/page.tsx.
+      { label: 'Penalisation', href: '/approvals?tab=penalisation' },
+    ],
+  },
+  {
     id: 'attendance',
     label: 'Attendance',
     icon: CalendarCheckIcon,
@@ -128,11 +156,10 @@ const navItems: NavItem[] = [
       {
         label: 'Dashboard',
         href: '/attendance/dashboard',
-        anyPermission: ['leave.approve', 'attendance.approve', 'scope.all'],
+        requireAnyPermission: ['leave.approve', 'attendance.approve', 'scope.all'],
       },
       { label: 'My Attendance', href: '/attendance', matchPrefixes: ['/attendance', '/me/attendance', '/leave'] },
-      { label: 'Approvals', href: '/approvals', anyPermission: ['leave.approve', 'attendance.approve'] },
-      { label: 'Settings', href: '/attendance/settings', anyPermission: ['attendance.settings.manage', 'calendar.manage'] },
+      { label: 'Settings', href: '/attendance/settings', requireAnyPermission: ['attendance.settings.manage', 'calendar.manage'] },
     ],
   },
   { id: 'timesheet', label: 'Timesheet', icon: TimerIcon, href: '/timesheet', roles: ['admin', 'employee', 'superadmin'] },
@@ -157,7 +184,10 @@ const navItems: NavItem[] = [
   },
   { id: 'team', label: 'My Team', icon: TeamIcon, href: '/team', roles: ['admin', 'employee', 'superadmin'] },
   {
-    id: 'org-all',
+    // One Organisation menu; which sub-links show depends on the viewer's
+    // access (directory/chart/documents for everyone, manage + all-employees
+    // only for those with the rights).
+    id: 'org',
     label: 'Organisation',
     icon: GlobeIcon,
     href: '/org',
@@ -165,11 +195,15 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Employee Directory', href: '/org?tab=directory' },
       { label: 'Organisation Chart', href: '/org?tab=chart' },
-      { label: 'Organization Documents', href: '/org?tab=documents' },
+      { label: 'Documents', href: '/org?tab=documents' },
+      {
+        label: 'Manage Structure',
+        href: '/manage-org',
+        requireAnyPermission: ['employees.write', 'org.manage'],
+      },
+      { label: 'All Employees', href: '/employees', roles: ['superadmin'], requireOrgScope: true },
     ],
   },
-  { id: 'org', label: 'Organization', icon: TeamIcon, href: '/employees', roles: ['superadmin'], requireOrgScope: true },
-  { id: 'manage-org', label: 'Manage organisation', icon: BriefcaseIcon, href: '/manage-org', roles: ['admin', 'employee', 'superadmin'], requireAnyPermission: ['employees.write', 'org.manage'] },
   {
     id: 'payroll',
     label: 'Payroll',
@@ -193,10 +227,10 @@ const COLLAPSE_STORAGE_KEY = 'hrms-sidebar-collapsed';
 const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/': { title: 'Home', subtitle: 'Overview of your workday and organization updates' },
   '/inbox': { title: 'Inbox', subtitle: 'Review messages, requests, and notifications that need your attention' },
+  '/approvals': { title: 'Approvals', subtitle: 'Approve requests routed to you and track your own' },
   '/me/attendance': { title: 'Attendance', subtitle: 'Track your attendance, timings, and attendance requests' },
   '/leave': { title: 'Leave Management', subtitle: 'View your leave balance, requests, and time off' },
   '/attendance/dashboard': { title: 'Dashboard', subtitle: 'Attendance and leave analytics for your team or organisation' },
-  '/approvals': { title: 'Approvals', subtitle: 'Review pending WFH, regularisation, leave, and penalisation requests' },
   '/attendance/settings': { title: 'Settings', subtitle: 'Shifts, leave, calendar, and penalization configuration for the organisation' },
   '/attendance/calendar': { title: 'Calendar', subtitle: 'Your attendance plus organisation holidays, WFH days, and events' },
   '/timesheet': { title: 'Timesheet', subtitle: 'Track logged hours across projects and categories' },
@@ -240,6 +274,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, isLoading, router]);
 
+  // Forced temporary-password change (T06): a user with the flag set stays
+  // on the change-password screen until the flag clears — nothing else in
+  // the app is reachable.
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.mustChangePassword) {
+      router.push('/change-password');
+    }
+  }, [isAuthenticated, isLoading, user, router]);
+
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [pathname]);
@@ -274,14 +317,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const filteredNavItems = navItems.filter(
-    (item) =>
-      !!user &&
-      item.roles.includes(user.role as RequiredRole) &&
-      (!item.requireOrgScope || hasOrgScope()) &&
-      (!item.requirePermission || hasPermission(item.requirePermission)) &&
-      (!item.requireAnyPermission || item.requireAnyPermission.some((code) => hasPermission(code))),
-  );
+  // Shared access test for a top-level item or a submenu child.
+  const canAccess = (rules: {
+    roles?: RequiredRole[];
+    requireOrgScope?: boolean;
+    requirePermission?: string;
+    requireAnyPermission?: string[];
+  }) =>
+    !!user &&
+    (!rules.roles || rules.roles.includes(user.role as RequiredRole)) &&
+    (!rules.requireOrgScope || hasOrgScope()) &&
+    (!rules.requirePermission || hasPermission(rules.requirePermission)) &&
+    (!rules.requireAnyPermission || rules.requireAnyPermission.some((code) => hasPermission(code)));
+
+  const filteredNavItems = navItems.filter(canAccess);
 
   const isActive = (item: NavItem) => {
     if (item.href === '/') return pathname === '/';
@@ -336,9 +385,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // The section owning the current page, if it groups sub-pages - rendered as
   // a secondary tab row under the header instead of a sidebar accordion.
   const activeSection = filteredNavItems.find((item) => item.children?.length && isActive(item));
-  const activeSectionChildren = activeSection?.children?.filter(
-    (child) => !child.anyPermission || child.anyPermission.some(hasPermission),
-  );
+  const activeSectionChildren = activeSection?.children?.filter(canAccess);
 
   const sidebarContent = (
     <>

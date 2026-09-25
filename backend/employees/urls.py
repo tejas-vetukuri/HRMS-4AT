@@ -16,10 +16,14 @@ from employees.views import (
     LegalEntityViewSet,
     LocationAdminViewSet,
     LocationViewSet,
+    OrgDirectoryViewSet,
 )
 
 router = DefaultRouter()
 router.register("employees", EmployeeViewSet, basename="employee")
+# Company-wide org directory (unscoped, read-only) — powers the Organisation
+# page's chart/directory for every user, regardless of RBAC scope.
+router.register("org-directory", OrgDirectoryViewSet, basename="org-directory")
 
 # Read-only lists the frontend pages call ({success, data}, snake_case).
 router.register("departments", DepartmentViewSet, basename="department")

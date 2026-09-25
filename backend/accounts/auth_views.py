@@ -199,6 +199,7 @@ class MeView(APIView):
                     "roles": roles,
                     "permissions": sorted(user_effective_permissions(user)),
                     "scope": resolve_management_scope(user),
+                    "mustChangePassword": user.must_change_password,
                 },
             }
         )
@@ -269,7 +270,11 @@ class ChangePasswordView(APIView):
 
         with transaction.atomic():
             user.set_password(new)
-            user.save(update_fields=["password"])
+            # A successful change clears the forced-change flag an admin-set
+            # temporary password raised (T06) — including the user's own first
+            # change, which is exactly the case that must clear it.
+            user.must_change_password = False
+            user.save(update_fields=["password", "must_change_password"])
             revoked = revoke_all_sessions(user)
             write_audit(
                 user, "user.password_changed", "User", user.pk, {"sessionsRevoked": revoked}

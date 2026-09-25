@@ -36,6 +36,7 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "description",
             "archetype",
             "is_active",
             "user_count",
@@ -90,10 +91,13 @@ class AuthUserSerializer(serializers.ModelSerializer):
     the DB pk is numeric."""
 
     id = serializers.SerializerMethodField()
+    # Rendered as `mustChangePassword` by the CamelCaseJSONRenderer — the
+    # frontend's forced-password-change gate reads it from login and /me.
+    must_change_password = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name"]
+        fields = ["id", "email", "first_name", "last_name", "must_change_password"]
 
     def get_id(self, obj):
         return str(obj.pk)

@@ -29,6 +29,10 @@ INSTALLED_APPS = [
     "accounts",
     "employees",
     "audit",
+    # Core primitives 3, 5 & 6 (approvals / notifications / documents) — docs/ARCHITECTURE.md.
+    "approvals",
+    "notifications",
+    "documents",
     # Plug-in modules built on the core.
     "payroll",
     "org_calendar",
@@ -100,6 +104,25 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Documents primitive (#6): files land on local disk under MEDIA_ROOT for now;
+# swapping to S3 later is a storage-backend change, not a schema change.
+MEDIA_URL = "media/"
+MEDIA_ROOT = env("DJANGO_MEDIA_ROOT", default=str(BASE_DIR / "media"))
+
+# Notifications primitive (#5): console backend until real SMTP/SES is wired for
+# prod. send_email() is fail-silent regardless (notifications/service.py).
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="no-reply@hrms.local")
+# Real delivery: set DJANGO_EMAIL_BACKEND to the SMTP backend and fill these in
+# (env). Left blank the console backend prints emails to the server log instead.
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],

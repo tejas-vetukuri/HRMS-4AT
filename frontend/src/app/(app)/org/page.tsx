@@ -128,15 +128,14 @@ export default function OrgPage() {
       try {
         setLoading(true);
         setError(null);
-        const [rawEmployees, departments, businessUnits, locations, costCenters, designations, profile] =
+        const [rawEmployees, departments, businessUnits, locations, costCenters, designations] =
           await Promise.all([
-            fetchJson<RawEmployee[]>('/api/employees'),
+            fetchJson<RawEmployee[]>('/api/org-directory'),
             fetchJson<NamedEntity[]>('/api/departments'),
             fetchJson<NamedEntity[]>('/api/business-units'),
             fetchJson<NamedEntity[]>('/api/locations'),
             fetchJson<NamedEntity[]>('/api/cost-centers'),
             fetchJson<NamedEntity[]>('/api/designations'),
-            fetchJson<{ id: string }>('/api/ess/profile'),
           ]);
         if (cancelled) return;
         const deptMap = toNameMap(departments);
@@ -145,7 +144,14 @@ export default function OrgPage() {
         const ccMap = toNameMap(costCenters);
         const desigMap = toNameMap(designations);
         setEmployees(rawEmployees.map((e) => toEmployee(e, deptMap, buMap, locMap, ccMap, desigMap)));
-        setMeId(profile.id);
+        // Best-effort: only marks "you" on the chart. An account without an
+        // employee record (e.g. superadmin) has no profile — that must not
+        // blank the directory/chart for everyone else.
+        fetchJson<{ id: string }>('/api/ess/profile')
+          .then((profile) => {
+            if (!cancelled) setMeId(profile.id);
+          })
+          .catch(() => {});
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load organisation data');
       } finally {
@@ -159,30 +165,8 @@ export default function OrgPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-['Inter']">
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-8">
-        <div className="flex gap-6">
-          {(
-            [
-              ['directory', 'Employee Directory'],
-              ['chart', 'Organisation Chart'],
-              ['documents', 'Organization Documents'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`px-1 py-3 border-b-2 font-semibold text-sm transition-colors ${
-                tab === id
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* Section tabs come from the uniform sub-nav in the app layout, driven by
+          the ?tab= query this page reads above. */}
       <div className="p-4 sm:p-8">
         {tab === 'documents' ? (
           <Documents />

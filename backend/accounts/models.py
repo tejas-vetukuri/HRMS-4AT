@@ -19,6 +19,7 @@ class Role(models.Model):
     are seeded defaults, not a hardcoded ceiling — see docs/REQUIREMENTS.md §0."""
 
     name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=255, blank=True)
     archetype = models.CharField(
         max_length=20,
         choices=RoleArchetype.choices,
@@ -91,6 +92,12 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     role = models.ForeignKey(
         Role, null=True, blank=True, on_delete=models.PROTECT, related_name="users"
+    )
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text="True when an admin has issued a temporary password: "
+        "the user must change it (POST users/me/change-password) before "
+        "using the app.",
     )
 
     def __str__(self):
