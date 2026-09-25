@@ -58,3 +58,25 @@ Acceptance:
 6. Frontend: when `mustChangePassword` is true after login, the user is routed to
    the change-password screen and cannot reach the app until they change it.
 7. New backend tests cover 2/3/4/5; existing accounts/verify_rbac tests still pass.
+
+## [T07] Bulk-provision logins for real employees (no send)
+
+Depends on T06 (done). Gives employees who currently have an unusable password
+a temporary one they must change on first login. Distribution of credentials is
+the human's job — this command only creates them and writes an export file.
+
+Acceptance:
+1. New management command `provision_logins` in backend/accounts/management/commands/.
+2. For each active User linked to an employee whose password is unusable
+   (`has_usable_password()` is False): set a random temp password
+   (secrets.token_urlsafe) and `must_change_password=True`.
+3. Idempotent: users who already have a usable password are skipped unless
+   `--force` is passed (then reset + flag them too).
+4. `--dry-run` reports counts and changes nothing.
+5. Writes an export CSV (path via `--out`, default under a gitignored dir) with
+   columns email,temporary_password — and prints the count. NEVER commit the CSV.
+6. Writes one audit row per provisioned user (write_audit, action
+   "User.login_provisioned").
+7. Does NOT send email or any external message.
+8. A test covers: unusable-password user gets provisioned + flagged; usable-password
+   user is skipped without --force; --dry-run changes nothing.
