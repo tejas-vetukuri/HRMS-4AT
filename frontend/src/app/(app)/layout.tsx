@@ -125,7 +125,7 @@ const navItems: NavItem[] = [
       { label: 'Documents', href: '/org?tab=documents' },
       { label: 'Org Structure', href: '/org-module/legal-entities' },
       { label: 'Job Architecture', href: '/org-module/job-families' },
-      { label: 'Onboarding', href: '/org-module/preboarding' },
+      { label: 'Onboarding', href: '/onboarding' },
       { label: 'Org Changes', href: '/org-module/promotions' },
       { label: 'Settings', href: '/org-module/org-configuration' },
       {

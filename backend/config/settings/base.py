@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "documents",
     # Plug-in modules built on the core.
     "payroll",
+    "onboarding",
     # approvals, notifications, documents, and further plugin apps land here
     # as Phase 0/2/3+ scaffolding proceeds (docs/TASKS.md P0-E1-03/04).
 ]
@@ -115,6 +116,22 @@ EMAIL_BACKEND = env(
     "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="no-reply@hrms.local")
+# Display name used in email templates (notifications/utils.py renders it into
+# every HTML email context as `company_name`). Overridable via env.
+COMPANY_NAME = env("COMPANY_NAME", default="4AT HRMS")
+# Base URL of the Next.js frontend, used to build absolute candidate-facing
+# links (offer signing, set-password). Overridable via env.
+FRONTEND_ORIGIN = env("FRONTEND_ORIGIN", default="http://localhost:3000")
+# Lifetime (hours) of the one-time set-password link issued by the onboarding
+# flow (accounts.models.issue_password_setup_token). Overridable via env.
+PASSWORD_SETUP_TOKEN_TTL_HOURS = env.int("PASSWORD_SETUP_TOKEN_TTL_HOURS", default=72)
+# Lifetime (hours) of the candidate-facing offer signing token
+# (onboarding.models.OfferLetter.issue_signing_token). Overridable via env.
+OFFER_SIGNING_TOKEN_TTL_HOURS = env.int("OFFER_SIGNING_TOKEN_TTL_HOURS", default=168)  # 7 days
+# E-signature provider selection for the onboarding module
+# (onboarding.esignature.get_signature_provider). Overridable via env.
+ESIGNATURE_PROVIDER = env("ESIGNATURE_PROVIDER", default="in_app")
+ESIGN_WEBHOOK_SECRET = env("ESIGN_WEBHOOK_SECRET", default="dev-only-webhook-secret")
 # Real delivery: set DJANGO_EMAIL_BACKEND to the SMTP backend and fill these in
 # (env). Left blank the console backend prints emails to the server log instead.
 EMAIL_HOST = env("EMAIL_HOST", default="")
@@ -155,7 +172,14 @@ REST_FRAMEWORK = {
     # account being brute-forced from anywhere. Deliberately generous (not a
     # tight production value) since this also has to not lock out normal
     # local dev/test usage.
-    "DEFAULT_THROTTLE_RATES": {"login": "20/min"},
+    # The offer_public_* scopes below belong to the onboarding module's
+    # unauthenticated candidate-facing offer endpoints (token-guarded but
+    # still rate-limited); additive entries, the login scope is unchanged.
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "20/min",
+        "offer_public_read": "60/min",
+        "offer_public_write": "20/min",
+    },
 }
 
 # P1-E4-02: 5 failed attempts locks the account for this long. A window

@@ -13,6 +13,12 @@ from .access import can_access
 from .models import Document
 from .serializers import DocumentSerializer
 
+# Upload validation limits shared with the onboarding module (which imports
+# them for its employee-letter upload path). Same values the teammate's
+# documents module enforced; additive constants, no behavior change here.
+ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 class DocumentListCreateView(APIView):
     permission_classes = [IsAuthenticated]
