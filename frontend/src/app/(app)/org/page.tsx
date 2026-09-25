@@ -1,7 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  STATUS_LABELS,
+  fmtDate,
+  fullName,
+  type EmployeeRow,
+  type EmployeeStatus,
+} from '@/lib/admin/orgApi';
+import { Badge } from '@/components/admin/ui';
 
 /* ------------------------------ data ------------------------------ */
 
@@ -93,18 +101,10 @@ function toEmployee(
   };
 }
 
-const filterKeys = ['businessUnit', 'department', 'location', 'costCenter'] as const;
-type FilterKey = (typeof filterKeys)[number];
-
-const filterMeta: Record<FilterKey, string> = {
-  businessUnit: 'Business Unit',
-  department: 'Department',
-  location: 'Location',
-  costCenter: 'Cost Center',
-};
-
-const uniqueValues = (employees: Employee[], key: FilterKey) =>
-  Array.from(new Set(employees.map((e) => e[key]))).sort();
+async function fetchNamed(url: string): Promise<NamedEntity[]> {
+  const items = await fetchJson<{ id: number | string; name: string }[]>(url);
+  return items.map((e) => ({ id: String(e.id), name: e.name }));
+}
 
 /* ------------------------------ page ------------------------------ */
 
@@ -175,7 +175,7 @@ export default function OrgPage() {
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : tab === 'directory' ? (
-          <Directory employees={employees} />
+          <Directory />
         ) : (
           <OrgChart employees={employees} meId={meId} />
         )}
@@ -369,68 +369,189 @@ function Documents() {
 
 /* ------------------------------ directory ------------------------------ */
 
-function Directory({ employees }: { employees: Employee[] }) {
-  const [filters, setFilters] = useState<Record<FilterKey, string>>({
-    businessUnit: '',
-    department: '',
-    location: '',
-    costCenter: '',
-  });
+/** The canonical employee directory (EMP-B4): server-side filters wired to the
+ * existing `GET /api/employees` query params, with a list/grid toggle. A row
+ * opens the profile page at `/org/[id]`. */
+function Directory() {
+  const router = useRouter();
+
+  const [rows, setRows] = useState<EmployeeRow[]>([]);
+  const [departments, setDepartments] = useState<NamedEntity[]>([]);
+  const [designations, setDesignations] = useState<NamedEntity[]>([]);
+  const [locations, setLocations] = useState<NamedEntity[]>([]);
+
+  const [department, setDepartment] = useState('');
+  const [location, setLocation] = useState('');
+  const [status, setStatus] = useState<'' | EmployeeStatus>('');
+  const [noManager, setNoManager] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<'list' | 'grid'>('list');
 
-  const hasActiveFilter = Object.values(filters).some(Boolean) || search.trim() !== '';
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const firstLoad = useRef(true);
 
-  const rows = useMemo(() => {
-    return employees.filter((e) => {
-      for (const key of filterKeys) {
-        if (filters[key] && e[key] !== filters[key]) return false;
+  // Reference lists for the filter dropdowns and name resolution. These come
+  // from the public proxies (same {success, data} shape), so anyone who can
+  // read the directory can read them.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [depts, desigs, locs] = await Promise.all([
+          fetchNamed('/api/departments'),
+          fetchNamed('/api/designations'),
+          fetchNamed('/api/locations'),
+        ]);
+        if (!cancelled) {
+          setDepartments(depts);
+          setDesignations(desigs);
+          setLocations(locs);
+        }
+      } catch {
+        // Filter dropdowns stay empty; the directory still loads.
       }
-      if (search.trim()) {
-        const hay = `${e.name} ${e.title} ${e.email} ${e.department}`.toLowerCase();
-        if (!hay.includes(search.trim().toLowerCase())) return false;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounce the search box so each keystroke isn't a request.
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (firstLoad.current) setLoading(true);
+      else setRefreshing(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        if (department) params.set('department', department);
+        if (location) params.set('location', location);
+        if (status) params.set('status', status);
+        if (noManager) params.set('no_manager', '1');
+        if (search) params.set('search', search);
+        const q = params.toString();
+        const data = await fetchJson<EmployeeRow[]>(`/api/employees${q ? `?${q}` : ''}`);
+        if (!cancelled) setRows(data);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load employees');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+          firstLoad.current = false;
+        }
       }
-      return true;
-    });
-  }, [employees, filters, search]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [department, location, status, noManager, search]);
+
+  const deptNames = useMemo(() => toNameMap(departments), [departments]);
+  const desigNames = useMemo(() => toNameMap(designations), [designations]);
+  const locNames = useMemo(() => toNameMap(locations), [locations]);
+  const byId = useMemo(() => Object.fromEntries(rows.map((e) => [e.id, e])), [rows]);
+
+  const hasActiveFilter =
+    department !== '' || location !== '' || status !== '' || noManager || searchInput.trim() !== '';
 
   const clearAll = () => {
-    setFilters({ businessUnit: '', department: '', location: '', costCenter: '' });
-    setSearch('');
+    setDepartment('');
+    setLocation('');
+    setStatus('');
+    setNoManager(false);
+    setSearchInput('');
   };
+
+  const openProfile = (id: string) => router.push(`/org/${id}`);
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
         <div className="flex flex-wrap items-end gap-3">
-          {filterKeys.map((key) => (
-            <div key={key} className="min-w-[150px] flex-1">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                {filterMeta[key]}
-              </label>
-              <select
-                value={filters[key]}
-                onChange={(e) => setFilters((f) => ({ ...f, [key]: e.target.value }))}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
-              >
-                <option value="">All</option>
-                {uniqueValues(employees, key).map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+          <div className="min-w-[150px] flex-1">
+            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              Department
+            </label>
+            <select
+              aria-label="Filter by department"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
+            >
+              <option value="">All</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[150px] flex-1">
+            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              Location
+            </label>
+            <select
+              aria-label="Filter by location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
+            >
+              <option value="">All</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[130px] flex-1">
+            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              Status
+            </label>
+            <select
+              aria-label="Filter by status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as '' | EmployeeStatus)}
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
+            >
+              <option value="">Any</option>
+              <option value="active">Active</option>
+              <option value="on_leave">On leave</option>
+              <option value="exited">Left</option>
+            </select>
+          </div>
           <div className="min-w-[180px] flex-1">
             <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Search</label>
             <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name, title or email"
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Name, code or email"
+              aria-label="Search employees"
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
             />
           </div>
+          <button
+            onClick={() => setNoManager((v) => !v)}
+            aria-pressed={noManager}
+            className={`px-3 py-2 text-xs font-semibold border rounded-lg transition-colors ${
+              noManager
+                ? 'bg-amber-100 border-amber-300 text-amber-900'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            No manager
+          </button>
           {hasActiveFilter ? (
             <button
               onClick={clearAll}
@@ -443,50 +564,135 @@ function Directory({ employees }: { employees: Employee[] }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-bold text-slate-900">Employees</h2>
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold text-slate-900">Employees</h2>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden" role="group" aria-label="Change view">
+              <button
+                onClick={() => setView('list')}
+                aria-pressed={view === 'list'}
+                className={`px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  view === 'list' ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setView('grid')}
+                aria-pressed={view === 'grid'}
+                className={`px-2.5 py-1.5 text-xs font-semibold border-l border-gray-200 transition-colors ${
+                  view === 'grid' ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                Grid
+              </button>
+            </div>
+          </div>
           <span className="text-xs text-gray-500">
-            Showing {rows.length} of {employees.length}
+            {refreshing ? 'Updating…' : `Showing ${rows.length}`}
           </span>
         </div>
-        {rows.length === 0 ? (
+
+        {loading ? (
+          <p className="px-5 py-12 text-center text-sm text-gray-500">Loading employees…</p>
+        ) : error ? (
+          <p className="px-5 py-12 text-center text-sm text-red-600">{error}</p>
+        ) : rows.length === 0 ? (
           <p className="px-5 py-12 text-center text-sm text-gray-500">No employees match these filters.</p>
-        ) : (
+        ) : view === 'list' ? (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Employee</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Department</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Business Unit</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Location</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Cost Center</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden md:table-cell">Job title</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden lg:table-cell">Department</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden xl:table-cell">Location</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden lg:table-cell">Reports to</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden md:table-cell">Joined</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rows.map((e) => (
-                  <tr key={e.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`w-8 h-8 rounded-full bg-gradient-to-br ${e.color} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}
-                        >
-                          {e.initials}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{e.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{e.title}</p>
+                {rows.map((e) => {
+                  const manager = e.manager_id ? byId[e.manager_id] : null;
+                  return (
+                    <tr key={e.id} onClick={() => openProfile(e.id)} className="hover:bg-purple-50 cursor-pointer transition-colors">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`w-8 h-8 rounded-full bg-gradient-to-br ${colorFor(e.id)} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}
+                          >
+                            {`${e.first_name?.[0] ?? ''}${e.last_name?.[0] ?? ''}`.toUpperCase() || '—'}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 truncate">{fullName(e) || e.work_email}</p>
+                            <p className="text-xs text-gray-400">{e.employee_code}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{e.department}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{e.businessUnit}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{e.location}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{e.costCenter}</td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600 hidden md:table-cell">
+                        {e.designation_id ? (desigNames[e.designation_id] ?? '—') : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-700 hidden lg:table-cell">
+                        {e.department_id ? (deptNames[e.department_id] ?? '—') : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-700 hidden xl:table-cell">
+                        {e.location_id ? (locNames[e.location_id] ?? '—') : '—'}
+                      </td>
+                      <td className="px-5 py-3 hidden lg:table-cell">
+                        {manager ? (
+                          <span className="text-gray-700">{fullName(manager)}</span>
+                        ) : e.manager_id ? (
+                          <span className="text-gray-400">—</span>
+                        ) : (
+                          <span className="text-amber-700">Not set</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600 hidden md:table-cell">{fmtDate(e.date_of_joining)}</td>
+                      <td className="px-5 py-3">
+                        {e.status === 'active' && <Badge tone="green">{STATUS_LABELS.active}</Badge>}
+                        {e.status === 'on_leave' && <Badge tone="amber">{STATUS_LABELS.on_leave}</Badge>}
+                        {e.status === 'exited' && <Badge tone="red">{STATUS_LABELS.exited}</Badge>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+            {rows.map((e) => (
+              <button
+                key={e.id}
+                onClick={() => openProfile(e.id)}
+                className="text-left bg-white rounded-2xl border border-gray-200 p-4 hover:border-purple-300 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`w-10 h-10 rounded-full bg-gradient-to-br ${colorFor(e.id)} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+                  >
+                    {`${e.first_name?.[0] ?? ''}${e.last_name?.[0] ?? ''}`.toUpperCase() || '—'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{fullName(e) || e.work_email}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {e.designation_id ? (desigNames[e.designation_id] ?? '—') : '—'}
+                    </p>
+                  </div>
+                  {e.status === 'active' && <Badge tone="green">{STATUS_LABELS.active}</Badge>}
+                  {e.status === 'on_leave' && <Badge tone="amber">{STATUS_LABELS.on_leave}</Badge>}
+                  {e.status === 'exited' && <Badge tone="red">{STATUS_LABELS.exited}</Badge>}
+                </div>
+                <p className="mt-2 text-xs text-gray-500 truncate">
+                  {[e.department_id ? deptNames[e.department_id] : null, e.location_id ? locNames[e.location_id] : null]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
+                </p>
+                <p className="text-xs text-gray-400 truncate">{e.work_email}</p>
+              </button>
+            ))}
           </div>
         )}
       </div>
