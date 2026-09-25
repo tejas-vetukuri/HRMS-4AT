@@ -15,6 +15,7 @@ export interface User {
   role: string;
   permissions: string[];
   scope: ManagementScope;
+  is_superuser?: boolean;
 }
 
 export interface AuthContextType {

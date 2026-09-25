@@ -64,8 +64,11 @@ export async function GET(req: NextRequest) {
     }
 
     const u = body.data;
+    // A role's archetype (employee/admin/superadmin) is what the UI renders
+    // as; custom roles such as "Payroll Admin" only carry it there.
+    const archetype = u.roles?.[0]?.archetype?.toLowerCase();
     const backendRole = (u.roles?.[0]?.name || 'employee').toLowerCase();
-    const role = roleMapping[backendRole] || 'employee';
+    const role = roleMapping[archetype] || roleMapping[backendRole] || 'employee';
 
     const resp = NextResponse.json({
       success: true,

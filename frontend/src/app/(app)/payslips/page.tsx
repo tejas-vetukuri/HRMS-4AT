@@ -612,6 +612,9 @@ export default function PayslipsPage() {
                           <h2 className="text-base font-bold text-slate-900">Payslip</h2>
                           <p className="text-xs text-gray-500 mt-0.5">{monthLabel(currentPayslip.month)}</p>
                         </div>
+                        <a href={`/payslips/view/${currentPayslip.id}`} className="text-sm font-medium text-blue-700 hover:underline">
+                          View full payslip →
+                        </a>
                       </div>
                     </div>
 

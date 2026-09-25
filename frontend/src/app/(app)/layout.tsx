@@ -27,6 +27,7 @@ import {
   PanelLeftOpenIcon,
   SearchIcon,
   FingerprintIcon,
+  ReceiptIcon,
 } from '@/components/icons';
 
 type RequiredRole = 'employee' | 'admin' | 'superadmin';
@@ -74,6 +75,21 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    id: 'payroll',
+    label: 'Payroll',
+    icon: ReceiptIcon,
+    href: '/payroll',
+    roles: ['admin', 'superadmin'],
+    children: [
+      { label: 'Dashboard', href: '/payroll' },
+      { label: 'Run Payroll', href: '/payroll/run' },
+      { label: 'Configuration', href: '/payroll/configuration' },
+      { label: 'Employee Compensation', href: '/payroll/compensation' },
+      { label: 'Approvals', href: '/payroll/approvals' },
+      { label: 'Reports & Audit', href: '/payroll/reports' },
+    ],
+  },
+  {
     id: 'perf',
     label: 'Performance',
     icon: TrendingUpIcon,
@@ -112,6 +128,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/settings': { title: 'Settings', subtitle: 'Manage your account preferences' },
   '/help': { title: 'Help & Support', subtitle: 'Find answers to common questions' },
   '/performance': { title: 'Performance', subtitle: 'Track reviews, goals, feedback, and career development' },
+  '/payroll': { title: 'Payroll', subtitle: 'Configure, process, approve and release payroll' },
   '/payslips': { title: 'My Finances', subtitle: 'View your payslips, salary, taxes, and expenses' },
   '/me': { title: 'Me', subtitle: 'Access your personal information and records' },
   '/engage': { title: 'Engage', subtitle: 'Connect with colleagues and stay updated with your organization' },
