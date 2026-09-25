@@ -9,7 +9,10 @@ import {
   type EmployeeRow,
   type EmployeeStatus,
 } from '@/lib/admin/orgApi';
-import { Badge } from '@/components/admin/ui';
+import { Badge, Notice } from '@/components/admin/ui';
+import { EmployeeDrawer } from '@/components/admin/org/EmployeeDrawer';
+import type { Lookups } from '@/components/admin/org/useOrgData';
+import { useAuth } from '@/lib/auth/useAuth';
 
 /* ------------------------------ data ------------------------------ */
 
@@ -374,11 +377,21 @@ function Documents() {
  * opens the profile page at `/org/[id]`. */
 function Directory() {
   const router = useRouter();
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission('employees.write');
 
   const [rows, setRows] = useState<EmployeeRow[]>([]);
-  const [departments, setDepartments] = useState<NamedEntity[]>([]);
-  const [designations, setDesignations] = useState<NamedEntity[]>([]);
-  const [locations, setLocations] = useState<NamedEntity[]>([]);
+  // The full directory (unfiltered) backs the manager names and the
+  // add/edit drawer's manager picker.
+  const [allEmployees, setAllEmployees] = useState<EmployeeRow[]>([]);
+  const [lookups, setLookups] = useState<Lookups>({
+    departments: [],
+    designations: [],
+    locations: [],
+    legalEntities: [],
+    businessUnits: [],
+    costCenters: [],
+  });
 
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
@@ -391,24 +404,36 @@ function Directory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState<null | 'new' | string>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const firstLoad = useRef(true);
 
-  // Reference lists for the filter dropdowns and name resolution. These come
-  // from the public proxies (same {success, data} shape), so anyone who can
-  // read the directory can read them.
+  // Reference lists for the filter dropdowns, name resolution and the
+  // add/edit drawer. These come from the public proxies (same {success, data}
+  // shape), so anyone who can read the directory can read them — no admin
+  // permission needed to view.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [depts, desigs, locs] = await Promise.all([
+        const [depts, desigs, locs, legal, bus, cost] = await Promise.all([
           fetchNamed('/api/departments'),
           fetchNamed('/api/designations'),
           fetchNamed('/api/locations'),
+          fetchNamed('/api/legal-entities'),
+          fetchNamed('/api/business-units'),
+          fetchNamed('/api/cost-centers'),
         ]);
         if (!cancelled) {
-          setDepartments(depts);
-          setDesignations(desigs);
-          setLocations(locs);
+          setLookups({
+            departments: depts,
+            designations: desigs,
+            locations: locs,
+            legalEntities: legal,
+            businessUnits: bus,
+            costCenters: cost,
+          });
         }
       } catch {
         // Filter dropdowns stay empty; the directory still loads.
@@ -417,6 +442,18 @@ function Directory() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const loadAll = async () => {
+    try {
+      setAllEmployees(await fetchJson<EmployeeRow[]>('/api/employees'));
+    } catch {
+      // Manager names fall back to dashes; the filtered list still loads.
+    }
+  };
+
+  useEffect(() => {
+    loadAll();
   }, []);
 
   // Debounce the search box so each keystroke isn't a request.
@@ -454,12 +491,12 @@ function Directory() {
     return () => {
       cancelled = true;
     };
-  }, [department, location, status, noManager, search]);
+  }, [department, location, status, noManager, search, refreshKey]);
 
-  const deptNames = useMemo(() => toNameMap(departments), [departments]);
-  const desigNames = useMemo(() => toNameMap(designations), [designations]);
-  const locNames = useMemo(() => toNameMap(locations), [locations]);
-  const byId = useMemo(() => Object.fromEntries(rows.map((e) => [e.id, e])), [rows]);
+  const deptNames = useMemo(() => toNameMap(lookups.departments), [lookups.departments]);
+  const desigNames = useMemo(() => toNameMap(lookups.designations), [lookups.designations]);
+  const locNames = useMemo(() => toNameMap(lookups.locations), [lookups.locations]);
+  const byId = useMemo(() => Object.fromEntries(allEmployees.map((e) => [e.id, e])), [allEmployees]);
 
   const hasActiveFilter =
     department !== '' || location !== '' || status !== '' || noManager || searchInput.trim() !== '';
@@ -474,8 +511,23 @@ function Directory() {
 
   const openProfile = (id: string) => router.push(`/org/${id}`);
 
+  const selectedEmployee =
+    drawer === null || drawer === 'new'
+      ? null
+      : (allEmployees.find((e) => e.id === drawer) ?? rows.find((e) => e.id === drawer) ?? null);
+
   return (
     <div className="space-y-4">
+      {notice && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <Notice tone="success">{notice}</Notice>
+          </div>
+          <button className="text-sm text-gray-500 hover:text-gray-900 shrink-0 pt-2" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[150px] flex-1">
@@ -489,7 +541,7 @@ function Directory() {
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
             >
               <option value="">All</option>
-              {departments.map((d) => (
+              {lookups.departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
@@ -507,7 +559,7 @@ function Directory() {
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
             >
               <option value="">All</option>
-              {locations.map((l) => (
+              {lookups.locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
                 </option>
@@ -588,9 +640,19 @@ function Directory() {
               </button>
             </div>
           </div>
-          <span className="text-xs text-gray-500">
-            {refreshing ? 'Updating…' : `Showing ${rows.length}`}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">
+              {refreshing ? 'Updating…' : `Showing ${rows.length}`}
+            </span>
+            {canWrite && (
+              <button
+                onClick={() => setDrawer('new')}
+                className="px-3 py-1.5 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Add employee
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -611,6 +673,9 @@ function Directory() {
                   <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden lg:table-cell">Reports to</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase hidden md:table-cell">Joined</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Status</th>
+                  {canWrite && (
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -655,6 +720,19 @@ function Directory() {
                         {e.status === 'on_leave' && <Badge tone="amber">{STATUS_LABELS.on_leave}</Badge>}
                         {e.status === 'exited' && <Badge tone="red">{STATUS_LABELS.exited}</Badge>}
                       </td>
+                      {canWrite && (
+                        <td className="px-5 py-3">
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setDrawer(e.id);
+                            }}
+                            className="text-xs font-semibold text-purple-700 hover:underline"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -696,6 +774,22 @@ function Directory() {
           </div>
         )}
       </div>
+
+      {drawer && (drawer === 'new' || selectedEmployee) && (
+        <EmployeeDrawer
+          key={drawer === 'new' ? 'new' : selectedEmployee?.id}
+          employee={drawer === 'new' ? null : selectedEmployee}
+          employees={allEmployees}
+          lookups={lookups}
+          canWrite={canWrite}
+          onClose={() => setDrawer(null)}
+          onSaved={async (_saved, message) => {
+            await loadAll();
+            setRefreshKey((k) => k + 1);
+            setNotice(message);
+          }}
+        />
+      )}
     </div>
   );
 }

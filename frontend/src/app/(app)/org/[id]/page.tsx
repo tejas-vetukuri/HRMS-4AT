@@ -15,6 +15,7 @@ import {
   type PersonalDetails,
 } from '@/lib/admin/orgApi';
 import type { Lookups, Named } from '@/components/admin/org/useOrgData';
+import { EmployeeDrawer } from '@/components/admin/org/EmployeeDrawer';
 import { Badge, Notice } from '@/components/admin/ui';
 
 const AVATAR_COLORS = [
@@ -89,6 +90,7 @@ export default function EmployeeProfilePage() {
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const { hasPermission } = useAuth();
   const canReadPersonal = hasPermission('employees.personal.read');
+  const canWrite = hasPermission('employees.write');
 
   const [tab, setTab] = useState<TabId>('job');
   const [employee, setEmployee] = useState<EmployeeRow | null>(null);
@@ -98,6 +100,8 @@ export default function EmployeeProfilePage() {
   const [personalDenied, setPersonalDenied] = useState(!canReadPersonal);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; status: number | null } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +173,17 @@ export default function EmployeeProfilePage() {
           ← Back to directory
         </Link>
 
+        {notice && (
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <Notice tone="success">{notice}</Notice>
+            </div>
+            <button className="text-sm text-gray-500 hover:text-gray-900 shrink-0 pt-2" onClick={() => setNotice(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-gray-500">Loading profile…</p>
         ) : error || !employee ? (
@@ -206,6 +221,14 @@ export default function EmployeeProfilePage() {
                     <span className="text-xs text-gray-400">{employee.employee_code}</span>
                   </div>
                 </div>
+                {canWrite && (
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="px-3 py-2 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shrink-0"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
             </div>
 
@@ -289,6 +312,26 @@ export default function EmployeeProfilePage() {
                 )}
               </div>
             </div>
+
+            {editing && (
+              <EmployeeDrawer
+                key={employee.id}
+                employee={employee}
+                employees={employees}
+                lookups={lookups}
+                canWrite={canWrite}
+                onClose={() => setEditing(false)}
+                onSaved={async (saved, message) => {
+                  setEmployee(saved);
+                  setNotice(message);
+                  try {
+                    setEmployees(await fetchJson<EmployeeRow[]>('/api/employees'));
+                  } catch {
+                    // Manager names keep their last values; the profile itself is fresh.
+                  }
+                }}
+              />
+            )}
           </>
         )}
       </div>
