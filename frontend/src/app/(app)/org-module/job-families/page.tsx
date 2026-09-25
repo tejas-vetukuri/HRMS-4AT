@@ -1,37 +1,82 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/useAuth';
-import { jobFamilies } from '@/lib/mock/org/phase2';
-import type { JobFamily } from '@/lib/mock/org/phase2';
-import { MasterTable, StatusPill, type FieldDef } from '@/components/org-module/ui';
+import { adminIsActive, orgAdminApi, orgApi } from '@/lib/api/org';
+import { ManageTable, type ManageField } from '@/components/org-module/manage-table';
+import { StatusPill } from '@/components/org-module/ui';
 
-const fields: FieldDef[] = [
+interface Row {
+  id: string;
+  name: string;
+  status: 'Active' | 'Inactive';
+}
+
+const fields: ManageField[] = [
   { name: 'name', label: 'Family name', placeholder: 'e.g. Engineering' },
-  { name: 'code', label: 'Code', placeholder: 'e.g. JF-ENG' },
-  { name: 'description', label: 'Description', placeholder: 'What roles belong here' },
 ];
 
 export default function JobFamiliesPage() {
   const { hasPermission } = useAuth();
-  const canManage = hasPermission('org.manage') || hasPermission('employees.write');
+  const canManage = hasPermission('org.manage');
+
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const families = canManage ? await orgAdminApi.list('job-families') : await orgApi.listJobFamilies();
+      setRows(
+        families.map((f) => ({
+          id: String(f.id),
+          name: f.name,
+          status: canManage ? (adminIsActive(f) ? 'Active' : 'Inactive') : 'Active',
+        })),
+      );
+    } catch {
+      // Never an error screen: empty table with a retry affordance.
+      setRows([]);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [canManage]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return (
-    <MasterTable<JobFamily>
+    <ManageTable<Row>
       title="Job Families"
-      subtitle="Top-level groupings — positions roll up to a family (mock data, stub actions)."
-      rows={jobFamilies}
+      subtitle="Top-level occupation groupings — live from the server."
+      rows={rows}
       fields={fields}
       addLabel="Add job family"
       canManage={canManage}
-      searchPlaceholder="Search by name, code or description…"
+      loading={loading}
+      loadFailed={loadFailed}
+      onRetry={refresh}
+      searchPlaceholder="Search by name…"
       columns={[
         { key: 'name', label: 'Family' },
-        { key: 'code', label: 'Code' },
-        { key: 'description', label: 'Description' },
-        { key: 'titles', label: 'Titles' },
-        { key: 'employees', label: 'Employees' },
         { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
       ]}
+      onAdd={async (v) => {
+        await orgAdminApi.create('job-families', { name: v.name.trim() });
+        await refresh();
+      }}
+      onEdit={async (row, v) => {
+        await orgAdminApi.update('job-families', row.id, { name: v.name.trim() });
+        await refresh();
+      }}
+      onDeactivate={async (row) => {
+        await orgAdminApi.deactivate('job-families', row.id);
+        await refresh();
+      }}
     />
   );
 }
