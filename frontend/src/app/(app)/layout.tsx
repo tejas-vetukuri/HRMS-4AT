@@ -131,6 +131,25 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    // Org module (Phase 1, frontend mock): overview dashboard, structure
+    // masters and stubs for the remaining sections. The older 'Organisation'
+    // item above keeps the live directory/chart; this one is the new module.
+    id: 'org-module',
+    label: 'Org',
+    icon: GlobeIcon,
+    href: '/org-module',
+    roles: ['admin', 'employee', 'superadmin'],
+    children: [
+      { label: 'Overview', href: '/org-module' },
+      { label: 'Employees', href: '/org-module/employees' },
+      { label: 'Org Structure', href: '/org-module/legal-entities' },
+      { label: 'Job Architecture', href: '/org-module/job-families' },
+      { label: 'Onboarding', href: '/org-module/preboarding' },
+      { label: 'Org Changes', href: '/org-module/promotions' },
+      { label: 'Settings', href: '/org-module/org-configuration' },
+    ],
+  },
+  {
     id: 'payroll',
     label: 'Payroll',
     icon: WalletIcon,
@@ -162,6 +181,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/manage-org': { title: 'Manage organisation', subtitle: 'Employees, reporting lines and the organisation structure' },
   '/admin': { title: 'Access control', subtitle: 'Manage roles, permissions, people and the activity log' },
   '/org': { title: 'Organisation', subtitle: 'Browse the employee directory and organisation chart' },
+  '/org-module': { title: 'Org', subtitle: 'Structure, roles and changes across the organisation' },
   '/settings': { title: 'Settings', subtitle: 'Manage your account preferences' },
   '/help': { title: 'Help & Support', subtitle: 'Find answers to common questions' },
   '/performance': { title: 'Performance', subtitle: 'Track reviews, goals, feedback, and career development' },
