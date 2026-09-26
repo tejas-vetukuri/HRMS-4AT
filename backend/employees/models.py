@@ -65,6 +65,96 @@ class CostCenter(SoftDeleteNamedModel):
     code = models.CharField(max_length=30, blank=True)
 
 
+class Team(SoftDeleteNamedModel):
+    """A working group inside a department (docx treats Teams as distinct
+    below Dept). `lead` is whoever runs the team day-to-day — nullable since
+    a team can exist before a lead is named."""
+
+    department = models.ForeignKey(
+        Department, null=True, blank=True, on_delete=models.PROTECT, related_name="teams"
+    )
+    lead = models.ForeignKey(
+        "Employee", null=True, blank=True, on_delete=models.SET_NULL, related_name="led_teams"
+    )
+
+
+class JobFamily(SoftDeleteNamedModel):
+    """A broad occupation group (e.g. Engineering, Design) — a standalone
+    reference table; positions point at level/grade, not at the family."""
+
+
+class Level(SoftDeleteNamedModel):
+    """A seniority rung (e.g. L1 Associate … L5 Principal) shared across
+    families. Referenced by Position and directly by Employee."""
+
+
+class Grade(SoftDeleteNamedModel):
+    """A pay band (e.g. G1 … G4). Referenced by Position and directly by
+    Employee."""
+
+
+class Position(models.Model):
+    """An approved seat, independent of any employee — it exists whether
+    filled or vacant. The incumbent link is the current holder; clearing it
+    (plus status back to vacant) is what "the seat is empty" means."""
+
+    STATUS_FILLED = "filled"
+    STATUS_VACANT = "vacant"
+    STATUS_HIRING = "hiring"
+    STATUS_ON_HOLD = "on_hold"
+    STATUS_CHOICES = [
+        (STATUS_FILLED, "Filled"),
+        (STATUS_VACANT, "Vacant"),
+        (STATUS_HIRING, "Hiring"),
+        (STATUS_ON_HOLD, "On hold"),
+    ]
+
+    name = models.CharField(max_length=150, blank=True, default="")
+    department = models.ForeignKey(
+        Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="positions"
+    )
+    job_title = models.ForeignKey(
+        Designation, null=True, blank=True, on_delete=models.SET_NULL, related_name="positions"
+    )
+    level = models.ForeignKey(
+        Level, null=True, blank=True, on_delete=models.SET_NULL, related_name="positions"
+    )
+    grade = models.ForeignKey(
+        Grade, null=True, blank=True, on_delete=models.SET_NULL, related_name="positions"
+    )
+    business_unit = models.ForeignKey(
+        BusinessUnit,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="positions",
+    )
+    reports_to = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="direct_reports",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_VACANT)
+    incumbent = models.ForeignKey(
+        "Employee",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="held_positions",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name or f"Position {self.pk}"
+
+
 class Employee(models.Model):
     """The one model every other module in the system references. `manager` is
     the self-referencing FK the `manager` (direct reports) and `team` (full
@@ -109,6 +199,16 @@ class Employee(models.Model):
     )
     cost_center = models.ForeignKey(
         CostCenter, null=True, blank=True, on_delete=models.PROTECT, related_name="employees"
+    )
+    # ORG Wave 1 additive FKs (all nullable — existing rows are untouched).
+    position = models.ForeignKey(
+        Position, null=True, blank=True, on_delete=models.SET_NULL, related_name="holders"
+    )
+    level = models.ForeignKey(
+        Level, null=True, blank=True, on_delete=models.SET_NULL, related_name="employees"
+    )
+    grade = models.ForeignKey(
+        Grade, null=True, blank=True, on_delete=models.SET_NULL, related_name="employees"
     )
     status = models.CharField(
         max_length=20, choices=EmployeeStatus.choices, default=EmployeeStatus.ACTIVE
@@ -206,9 +306,7 @@ class BankDetails(models.Model):
     (see onboarding/views.py). Additive model for the onboarding hybrid
     layer — no existing table is touched."""
 
-    employee = models.OneToOneField(
-        Employee, on_delete=models.CASCADE, related_name="bank_details"
-    )
+    employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name="bank_details")
     account_holder_name = models.CharField(max_length=200)
     account_number = models.CharField(max_length=34)
     ifsc_code = models.CharField(max_length=11, blank=True, default="")
@@ -388,7 +486,6 @@ class EmployeeLetter(models.Model):
 
     def __str__(self):
         return f"{self.title} for {self.employee_id}"
-
 
 class Resignation(models.Model):
     STATUS_SUBMITTED = "submitted"

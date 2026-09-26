@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("employees", "0006_grade_jobfamily_level_employee_grade_employee_level_and_more"),
+        ("employees", "0010_grade_jobfamily_level_employee_grade_employee_level_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

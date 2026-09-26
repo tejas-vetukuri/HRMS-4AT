@@ -88,7 +88,7 @@ def seed_org_masters(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("employees", "0006_grade_jobfamily_level_employee_grade_employee_level_and_more"),
+        ("employees", "0010_grade_jobfamily_level_employee_grade_employee_level_and_more"),
     ]
 
     operations = [

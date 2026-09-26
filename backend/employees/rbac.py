@@ -38,7 +38,8 @@ register_permissions(
     ),
     PermissionSpec(
         "org.manage",
-        "Manage the organisation structure: departments, job titles, locations, "
+        "Manage the organisation structure: departments, teams, job titles, "
+        "job families, levels, grades, positions, locations, "
         "legal entities, business units and cost centres",
         default_grants={"HR Admin": ScopeTier.ALL},
     ),

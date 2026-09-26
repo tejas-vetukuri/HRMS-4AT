@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("employees", "0005_employee_first_name_employee_joining_date_and_more"),
+        ("employees", "0009_fix_timestamp_columns"),
     ]
 
     operations = [
