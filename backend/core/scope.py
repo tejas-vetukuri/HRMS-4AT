@@ -17,6 +17,33 @@ from accounts.models import RolePermission, UserPermissionOverride
 from core.enums import ScopeTier
 from employees.models import Employee
 
+# Every person with an employee record is also a plain employee, whatever their
+# job role — so they always keep the "own stuff" self-service permissions below,
+# at SELF tier, even if their role never granted them. This is a floor, not a
+# ceiling: a role may still widen any of these to a broader tier, and an explicit
+# UserPermissionOverride deny still wins (so access can be revoked). Without this
+# floor, a specialised role (Finance, Payroll Admin, HR, …) built as "just the job
+# keys" silently loses the ability to see its own profile / apply for its own
+# leave / see its own payslip. Keep this list == the plain Employee role's own
+# self-tier grants; when a module adds a new self-service permission, add its code
+# here too.
+BASELINE_SELF_PERMISSIONS = frozenset(
+    {
+        "ess.profile.read",
+        "ess.profile.write",
+        "employees.read",
+        "example_leave.read",
+        "example_leave.write",
+        "onboarding.read",
+        "orgchanges.read",
+        "payroll.read",
+    }
+)
+
+
+def _has_employee_record(user) -> bool:
+    return getattr(user, "employee", None) is not None
+
 
 def user_has_permission(user, permission_code: str) -> bool:
     """Whether `user` holds `permission_code` at all, regardless of scope tier.
@@ -80,7 +107,7 @@ def _resolve_effective_scope(user, permission_code: str):
         return result
 
     if user.role_id is None:
-        result = (None, False)
+        result = _baseline_or_deny(user, permission_code)
         cache[permission_code] = result
         return result
 
@@ -89,9 +116,21 @@ def _resolve_effective_scope(user, permission_code: str):
         .filter(role_id=user.role_id, role__is_active=True, permission__code=permission_code)
         .first()
     )
-    result = (role_permission.scope_tier, True) if role_permission is not None else (None, False)
+    if role_permission is not None:
+        result = (role_permission.scope_tier, True)
+    else:
+        result = _baseline_or_deny(user, permission_code)
     cache[permission_code] = result
     return result
+
+
+def _baseline_or_deny(user, permission_code: str):
+    """Fallback when neither an override nor the user's role grants the code:
+    a self-service baseline permission is granted at SELF tier to anyone with an
+    employee record; everything else is denied."""
+    if permission_code in BASELINE_SELF_PERMISSIONS and _has_employee_record(user):
+        return (ScopeTier.SELF, True)
+    return (None, False)
 
 
 def explain_permission(user, permission_code: str) -> dict:
@@ -112,17 +151,20 @@ def explain_permission(user, permission_code: str) -> dict:
             "tier": override.scope_tier if override.is_granted else None,
             "source": "override" if override.is_granted else "override (deny)",
         }
+    baseline = {"granted": True, "tier": ScopeTier.SELF, "source": "baseline (employee)"}
+    is_baseline = permission_code in BASELINE_SELF_PERMISSIONS and _has_employee_record(user)
     if user.role_id is None:
-        return {"granted": False, "tier": None, "source": "none"}
+        return baseline if is_baseline else {"granted": False, "tier": None, "source": "none"}
     grant = (
         RolePermission.objects.filter(role_id=user.role_id, permission__code=permission_code)
         .select_related("role")
         .first()
     )
-    if grant is None:
-        return {"granted": False, "tier": None, "source": "none"}
-    if not grant.role.is_active:
-        return {"granted": False, "tier": None, "source": "role (inactive)"}
+    if grant is None or not grant.role.is_active:
+        if is_baseline:
+            return baseline
+        source = "none" if grant is None else "role (inactive)"
+        return {"granted": False, "tier": None, "source": source}
     return {"granted": True, "tier": grant.scope_tier, "source": "role"}
 
 
@@ -145,7 +187,11 @@ def user_effective_permissions(user) -> set:
     granted = {o.permission.code for o in overrides if o.is_granted}
     denied = {o.permission.code for o in overrides if not o.is_granted}
 
-    return (role_codes | granted) - denied
+    # Every employee also holds the self-service baseline (see BASELINE_SELF_
+    # PERMISSIONS), unless an explicit override denies a specific one.
+    baseline = set(BASELINE_SELF_PERMISSIONS) if _has_employee_record(user) else set()
+
+    return (role_codes | granted | baseline) - denied
 
 
 def resolve_management_scope(user, permission_code: str = "employees.read") -> dict:

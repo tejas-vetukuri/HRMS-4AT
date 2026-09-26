@@ -293,3 +293,45 @@ def test_all_tier_without_own_employee_record_sees_everyone():
     result = resolve_employee_scope(admin, permission.code)
 
     assert _ids(result) == {e.pk for e in others}
+
+
+def test_specialised_role_keeps_self_service_baseline():
+    """A role built with only its job permissions still lets the holder do their
+    own everyday things (apply for own leave, see own payslip/profile) — the
+    self-service baseline is granted at SELF tier to any employee, no matter their
+    role. Regression for the cross-module 'special role loses employee access' bug."""
+    payroll_only = PermissionFactory(code="payroll.manage")
+    own_leave = PermissionFactory(code="example_leave.write")  # a baseline code
+    role = RoleFactory()
+    RolePermissionFactory(role=role, permission=payroll_only, scope_tier=ScopeTier.ALL)
+    user = UserFactory(role=role)
+    me = EmployeeFactory(user=user)
+    coworker = EmployeeFactory()
+
+    # baseline self-service works despite the role never granting it...
+    leave_scope = resolve_employee_scope(user, "example_leave.write")
+    assert _ids(leave_scope) == {me.pk}          # only their own record
+    assert coworker.pk not in _ids(leave_scope)  # not anyone else's
+    assert user_has_permission(user, "ess.profile.read")
+    assert "payroll.read" in user_effective_permissions(user)  # baseline in flat set
+
+
+def test_baseline_can_still_be_denied_by_override():
+    """The baseline is a floor, not immovable: an explicit deny override still
+    removes a self-service permission for one person (e.g. a suspended employee)."""
+    perm = PermissionFactory(code="example_leave.write")
+    user = UserFactory(role=None)
+    EmployeeFactory(user=user)
+    UserPermissionOverrideFactory(
+        user=user, permission=perm, scope_tier=ScopeTier.SELF, is_granted=False
+    )
+
+    assert not user_has_permission(user, "example_leave.write")
+    assert "example_leave.write" not in user_effective_permissions(user)
+
+
+def test_baseline_does_not_apply_to_non_employee():
+    """A user with no employee record (e.g. an org-wide admin) is not an employee,
+    so the self-service baseline does not manufacture access for them."""
+    user = UserFactory(role=None)  # no EmployeeFactory
+    assert not user_has_permission(user, "ess.profile.read")
