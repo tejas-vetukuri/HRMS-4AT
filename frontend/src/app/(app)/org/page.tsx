@@ -808,6 +808,7 @@ function ancestorsOf(employees: Employee[], id: string): string[] {
 }
 
 function OrgChart({ employees, meId }: { employees: Employee[]; meId: string | null }) {
+  const router = useRouter();
   const byId = (id: string) => employees.find((e) => e.id === id);
   const me = meId ? byId(meId) : undefined;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -815,6 +816,54 @@ function OrgChart({ employees, meId }: { employees: Employee[]; meId: string | n
   const [deptFocus, setDeptFocus] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Search across name, title (designation/position) and department.
+  const matchIds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return new Set(
+      employees
+        .filter((e) =>
+          [e.name, e.title, e.department].join(' ').toLowerCase().includes(q),
+        )
+        .map((e) => e.id),
+    );
+  }, [employees, searchQuery]);
+
+  const runSearch = (q: string) => {
+    setSearchQuery(q);
+    const needle = q.trim().toLowerCase();
+    if (!needle) return;
+    const matches = employees.filter((e) =>
+      [e.name, e.title, e.department].join(' ').toLowerCase().includes(needle),
+    );
+    if (matches.length === 0) {
+      setToast('No one matches that search');
+      window.setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    // Expand every ancestor of every match so all matches are visible.
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      for (const m of matches) ancestorsOf(employees, m.id).forEach((a) => next.delete(a));
+      return next;
+    });
+    setHighlightId(matches[0].id);
+    scrollToNode(matches[0].id);
+  };
+
+  const expandAll = () => setCollapsed(new Set());
+
+  const collapseAll = () => {
+    const hasReports = new Set(
+      employees.filter((e) => employees.some((c) => c.managerId === e.id)).map((e) => e.id),
+    );
+    setCollapsed(hasReports);
+  };
+
+  const openProfile = (id: string) => router.push(`/org/${id}`);
 
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -886,6 +935,43 @@ function OrgChart({ employees, meId }: { employees: Employee[]; meId: string | n
 
   return (
     <div className="space-y-4">
+      {/* Search + expand/collapse controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              runSearch(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') runSearch(searchInput);
+            }}
+            placeholder="Search by employee, title or department…"
+            aria-label="Search organisation chart"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-purple-400"
+          />
+          {matchIds ? (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+              {matchIds.size} match{matchIds.size === 1 ? '' : 'es'}
+            </span>
+          ) : null}
+        </div>
+        <button
+          onClick={expandAll}
+          className="px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors"
+        >
+          Expand all
+        </button>
+        <button
+          onClick={collapseAll}
+          className="px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors"
+        >
+          Collapse all
+        </button>
+      </div>
+
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -957,6 +1043,8 @@ function OrgChart({ employees, meId }: { employees: Employee[]; meId: string | n
               deptFilter={deptFilter}
               highlightId={highlightId}
               grouped={groupByDept}
+              matchIds={matchIds}
+              onSelect={openProfile}
             />
           ))}
         </div>
@@ -1009,6 +1097,8 @@ function OrgNode({
   deptFilter,
   highlightId,
   grouped,
+  matchIds,
+  onSelect,
 }: {
   employee: Employee;
   employees: Employee[];
@@ -1017,6 +1107,8 @@ function OrgNode({
   deptFilter?: string;
   highlightId?: string | null;
   grouped?: boolean;
+  matchIds?: Set<string> | null;
+  onSelect?: (id: string) => void;
 }) {
   const reports = employees.filter(
     (e) => e.managerId === employee.id && (!deptFilter || e.department === deptFilter),
@@ -1025,15 +1117,23 @@ function OrgNode({
   const showChildren = reports.length > 0 && !isCollapsed;
   const single = reports.length === 1;
   const groups = grouped ? groupByDepartment(reports) : [];
+  const highlighted = highlightId === employee.id || (matchIds?.has(employee.id) ?? false);
 
   return (
     <div className="flex flex-col items-center">
-      {/* Card */}
+      {/* Card — click opens the employee profile. */}
       <div
         id={`org-node-${employee.id}`}
+        onClick={() => onSelect?.(employee.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSelect?.(employee.id);
+        }}
+        role={onSelect ? 'link' : undefined}
+        tabIndex={onSelect ? 0 : undefined}
+        title={`${employee.name} — ${employee.title} (${employee.department}) — open profile`}
         className={`relative w-56 rounded-xl border bg-white shadow-sm px-3 py-3 ${
-          highlightId === employee.id ? 'border-purple-400 ring-2 ring-purple-200' : 'border-gray-200'
-        }`}
+          onSelect ? 'cursor-pointer hover:border-purple-300 hover:shadow' : ''
+        } ${highlighted ? 'border-purple-400 ring-2 ring-purple-200' : 'border-gray-200'}`}
       >
         <div className="flex items-center gap-2.5">
           <span
@@ -1052,7 +1152,10 @@ function OrgNode({
 
         {reports.length > 0 ? (
           <button
-            onClick={() => onToggle(employee.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(employee.id);
+            }}
             className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center shadow hover:bg-purple-700 z-10"
             aria-label={isCollapsed ? 'Expand reports' : 'Collapse reports'}
           >
@@ -1090,6 +1193,8 @@ function OrgNode({
                       deptFilter={deptFilter}
                       highlightId={highlightId}
                       grouped
+                      matchIds={matchIds}
+                      onSelect={onSelect}
                     />
                   ))}
                 </div>
@@ -1117,6 +1222,8 @@ function OrgNode({
                 onToggle={onToggle}
                 deptFilter={deptFilter}
                 highlightId={highlightId}
+                matchIds={matchIds}
+                onSelect={onSelect}
               />
             </div>
           ))}
