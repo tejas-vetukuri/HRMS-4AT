@@ -18,6 +18,7 @@ from django.utils import timezone
 from payroll import models as m
 from payroll.engine.calculator import ENGINE_VERSION, calculate_employee
 from payroll.engine.money import ZERO, D
+from payroll.integrations import approvals_bridge, notify
 
 from . import config as config_service
 from . import people
@@ -584,11 +585,12 @@ def submit(run, actor):
     run.period.status = "pending_approval"
     run.period.save(update_fields=["status", "updated_at"])
     audit(actor, "run.submitted", run)
+    approvals_bridge.open_next_stage(run)
     return run
 
 
 @transaction.atomic
-def decide(run, actor, decision, comments, has_permission):
+def decide(run, actor, decision, comments, has_permission, from_inbox=False):
     if run.status != "submitted":
         raise conflict("This run is not awaiting approval.", code="PAY_INVALID_STATE")
     stage = run.approvals.filter(status="pending").order_by("sequence").first()
@@ -614,6 +616,10 @@ def decide(run, actor, decision, comments, has_permission):
     stage.comments = comments or ""
     stage.acted_at = timezone.now()
     stage.save()
+    if not from_inbox:
+        approvals_bridge.close_stage(
+            stage, actor, "approve" if decision == "approve" else "reject", comments
+        )
     period = run.period
     if decision == "approve":
         if not run.approvals.filter(status="pending").exists():
@@ -626,6 +632,8 @@ def decide(run, actor, decision, comments, has_permission):
     run.save()
     period.save(update_fields=["status", "updated_at"])
     audit(actor, f"run.{stage.stage}.{stage.status}", run, reason=comments)
+    if decision == "approve":
+        approvals_bridge.open_next_stage(run)
     return run
 
 
@@ -661,6 +669,7 @@ def finalize(run, actor):
         net_total=run.net_total,
         input_snapshot_id=run.input_snapshot_id,
     )
+    notify.run_finalized(run)
     return run
 
 

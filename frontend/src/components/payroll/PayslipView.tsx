@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { printPayslip } from './payslipDocument';
 import { Avatar, Badge, Button, Card, Icons, cx, downloadCsvRows, fmtDate, inr } from './ui';
 
 /** Employee Payslip (UI 06). Used by payroll staff and by the employee (ESS). */
@@ -12,6 +13,8 @@ export function PayslipView({ slip, otherMonths, ytd, back, hrefFor }: {
   const prev = otherMonths[idx + 1];
   const next = idx > 0 ? otherMonths[idx - 1] : undefined;
   const exportExcel = () => downloadCsvRows(`payslip_${p.employee.employee_code}_${p.period.label.replace(' ', '_')}.csv`, ['Section', 'Component', 'Amount'], [
+    ['Details', 'Employee', `${p.employee.name} (${p.employee.employee_code})`], ['Details', 'Department', p.employee.department], ['Details', 'Pay Period', `${p.period.start} to ${p.period.end}`],
+    ['Details', 'Pay Date', p.period.pay_date], ['Details', 'Working Days', p.working_days], ['Details', 'Payable Days', p.payable_days],
     ...p.earnings.map((l: any) => ['Earnings', l.name, l.amount]), ['Earnings', 'Total Earnings (A)', p.gross],
     ...p.deductions.map((l: any) => ['Deductions', l.name, l.amount]), ['Deductions', 'Total Deductions (B)', p.total_deductions], ['', 'Net Pay (A - B)', p.net_pay],
   ]);
@@ -25,7 +28,7 @@ export function PayslipView({ slip, otherMonths, ytd, back, hrefFor }: {
           <span className="border-x border-slate-200 px-6 py-2 font-medium">{p.period.label}</span>
           {next ? <Link href={hrefFor(next.id)} className="px-3 py-2"><Icons.chevronRight className="h-4 w-4" /></Link> : <span className="px-3 py-2 text-slate-300"><Icons.chevronRight className="h-4 w-4" /></span>}
         </div>
-        <Button variant="primary" onClick={() => window.print()}><Icons.download className="h-4 w-4" /> Download Payslip</Button>
+        <Button variant="primary" onClick={() => printPayslip(slip)}><Icons.download className="h-4 w-4" /> Download Payslip</Button>
       </div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
         <Card>
@@ -67,7 +70,7 @@ export function PayslipView({ slip, otherMonths, ytd, back, hrefFor }: {
         <div className="space-y-5 print:hidden">
           <Card title={<span className="flex items-center gap-2"><Icons.file className="h-5 w-5 text-blue-700" /> Download & Share</span>}>
             <div className="grid grid-cols-2 gap-2">
-              <Button onClick={() => window.print()}><Icons.file className="h-4 w-4" /> Download PDF</Button>
+              <Button onClick={() => printPayslip(slip)}><Icons.file className="h-4 w-4" /> Download PDF</Button>
               <Button onClick={exportExcel}><Icons.file className="h-4 w-4" /> Download Excel</Button>
             </div>
           </Card>

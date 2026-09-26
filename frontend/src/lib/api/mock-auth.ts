@@ -26,7 +26,7 @@ export interface MockUserProfile {
   email: string;
   firstName: string;
   lastName: string;
-  roles: Array<{ name: MockUserRole }>;
+  roles: Array<{ name: MockUserRole; archetype: 'employee' | 'admin' | 'superadmin' }>;
   permissions: string[];
   scope: { kind: 'org' | 'team' | 'self'; employeeIds?: string[] };
 }
@@ -37,7 +37,7 @@ export const MOCK_USERS: Record<string, MockUserProfile> = {
     email: 'admin@company.com',
     firstName: 'Admin',
     lastName: 'User',
-    roles: [{ name: 'admin' }],
+    roles: [{ name: 'admin', archetype: 'admin' }],
     permissions: [
       'employee.read',
       'employee.write',
@@ -60,7 +60,7 @@ export const MOCK_USERS: Record<string, MockUserProfile> = {
     email: 'manager@company.com',
     firstName: 'Manager',
     lastName: 'User',
-    roles: [{ name: 'manager' }],
+    roles: [{ name: 'manager', archetype: 'employee' }],
     permissions: [
       'employee.read',
       'attendance.read.self',
@@ -78,7 +78,7 @@ export const MOCK_USERS: Record<string, MockUserProfile> = {
     email: 'employee@company.com',
     firstName: 'Employee',
     lastName: 'User',
-    roles: [{ name: 'employee' }],
+    roles: [{ name: 'employee', archetype: 'employee' }],
     permissions: [
       'employee.read.self',
       'attendance.read.self',
@@ -96,7 +96,7 @@ export const MOCK_USERS: Record<string, MockUserProfile> = {
     email: 'finance@company.com',
     firstName: 'Finance',
     lastName: 'User',
-    roles: [{ name: 'finance' }],
+    roles: [{ name: 'finance', archetype: 'admin' }],
     permissions: [
       'payroll.read',
       'payroll.write',

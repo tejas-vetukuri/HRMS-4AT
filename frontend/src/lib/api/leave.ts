@@ -16,12 +16,23 @@ export interface LeaveType {
   id: string;
   name: string;
   code: string;
+  category: string;
   annual_allocation: number;
   carry_forward_limit: number;
   requires_approval: boolean;
   is_paid: boolean;
   description: string | null;
   status: string;
+}
+
+export interface LeaveTypeInput {
+  name: string;
+  category: string;
+  annual_allocation: number;
+  carry_forward_limit: number;
+  requires_approval: boolean;
+  is_paid: boolean;
+  description?: string;
 }
 
 export interface LeaveBalanceItem {
@@ -58,6 +69,15 @@ export interface LeaveRequest {
   leave_type_code: string | null;
   employee_name: string | null;
   approver_name: string | null;
+  /** Who actually decided this — usually the same as approver_name, but not
+   *  when an HR Admin resolved it via the approvals.manage override instead
+   *  of the assigned approver deciding it themselves. Use this, not
+   *  approver_name, for a "decided by" display. */
+  decided_by_name?: string | null;
+  approver_remarks?: string | null;
+  /** The generic approvals engine's own request id — decide through
+   *  requestsApi.approve/reject(this id), never a per-module endpoint. */
+  approval_request_id?: string | null;
 }
 
 export interface Holiday {
@@ -128,6 +148,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const leaveApi = {
   getTypes: () => request<LeaveType[]>('/types'),
+  createType: (input: LeaveTypeInput) =>
+    request<LeaveType>('/types', { method: 'POST', body: JSON.stringify(input) }),
+  updateType: (id: string, input: Partial<LeaveTypeInput>) =>
+    request<LeaveType>(`/types/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteType: (id: string) => request<{ id: string }>(`/types/${id}`, { method: 'DELETE' }),
   getBalance: () => request<LeaveBalanceItem[]>('/balance'),
   getRequests: () => request<LeaveRequest[]>('/requests'),
   getRequest: (id: string) => request<LeaveRequest>(`/requests/${id}`),
@@ -139,13 +164,14 @@ export const leaveApi = {
   cancelRequest: (id: string) =>
     request<LeaveRequest>(`/requests/${id}/cancel`, { method: 'POST' }),
   getPendingApprovals: () => request<LeaveRequest[]>('/approvals/pending'),
-  decide: (id: string, approve: boolean, rejectionReason?: string) =>
+  getApprovalHistory: () => request<LeaveRequest[]>('/approvals/history'),
+  decide: (id: string, approve: boolean, rejectionReason?: string, remarks?: string) =>
     request<LeaveRequest>(`/requests/${id}/approve`, {
       method: 'PUT',
       body: JSON.stringify(
         approve
-          ? { approve: true }
-          : { approve: false, rejection_reason: rejectionReason },
+          ? { approve: true, remarks }
+          : { approve: false, rejection_reason: rejectionReason, remarks },
       ),
     }),
   getHolidays: (year: number) => request<Holiday[]>(`/holidays?year=${year}`),

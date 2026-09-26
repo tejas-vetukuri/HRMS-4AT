@@ -238,3 +238,49 @@ def _recursive_subtree_ids(root_employee_id) -> set:
     with connection.cursor() as cursor:
         cursor.execute(sql, [root_employee_id])
         return {row[0] for row in cursor.fetchall()}
+
+
+# ---------------------------------------------------------------------------
+# Onboarding hybrid compatibility layer (additive only).
+#
+# The teammate's onboarding module was written against an older foundation API
+# (`core.scope.is_hr_admin/is_finance/visible_employee_ids`). Our RBAC resolves
+# scope through resolve_employee_scope() instead, so these thin shims translate
+# his call sites onto it. None of the resolver logic above is modified.
+# ---------------------------------------------------------------------------
+
+
+def _normalized_role_name(user) -> str:
+    """Role names in either convention: his lowercase ('hr_admin') and ours
+    title-cased ('HR Admin'). Normalizing both lets one check serve both."""
+    role = getattr(user, "role", None)
+    name = getattr(role, "name", "") or ""
+    return name.lower().replace(" ", "_")
+
+
+def is_hr_admin(user) -> bool:
+    """HR-admin check for the onboarding module: superusers and holders of the
+    HR Admin role (either naming convention) qualify. Deliberately name-based,
+    matching the semantics his onboarding code was written against — a custom
+    role holding a broad `employees.write` grant is NOT HR here."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    return _normalized_role_name(user) == "hr_admin"
+
+
+def is_finance(user) -> bool:
+    """Finance check for the onboarding module: holders of the Finance role
+    (either naming convention). HR Admin is intentionally NOT finance here —
+    his call sites always test `is_hr_admin or is_finance` explicitly."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return _normalized_role_name(user) == "finance"
+
+
+def visible_employee_ids(user, permission_code: str = "employees.read"):
+    """Employee ids `user` may act on for `permission_code`, resolved through
+    our RBAC scope resolver. Returns the values queryset (supports `in` and
+    `__in` at his call sites, same as his implementation)."""
+    return resolve_employee_scope(user, permission_code).values_list("id", flat=True)

@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyToBackend, setAuthCookies, clearAuthCookies } from '@/lib/api/proxy';
-import { MOCK_AUTH_ENABLED, MOCK_REFRESH_TOKEN, getMockUserByEmail, MOCK_USER } from '@/lib/api/mock-auth';
+import { MOCK_AUTH_ENABLED, MOCK_REFRESH_TOKEN, MOCK_USER, getMockUserByEmail } from '@/lib/api/mock-auth';
 
-// The backend now guarantees exactly one primary role per user:
-// Employee | Admin | Super Admin.
-const roleMapping: Record<string, string> = {
-  employee: 'employee',
-  admin: 'admin',
-  'super admin': 'superadmin',
-  superadmin: 'superadmin',
-  manager: 'manager',
-  finance: 'finance',
-};
+// Previously this file guessed the frontend archetype from the backend
+// role's free-text *name* via a hardcoded table (`{employee: 'employee',
+// admin: 'admin', 'super admin': 'superadmin'}`). That broke the moment the
+// backend's real role names turned out to be Employee/Manager/HR Admin/Finance
+// (docs/REQUIREMENTS.md §0) instead of Employee/Admin/Super Admin — "manager"
+// and "hr admin" aren't in the table, so both silently fell through to the
+// `|| 'employee'` default, quietly stripping HR Admin and Finance users of
+// their admin/superadmin UI entirely. The backend now sends `roles[0].archetype`
+// explicitly instead (one of exactly the 3 values this frontend understands:
+// employee/admin/superadmin — see backend/core/enums.py's RoleArchetype), so
+// there's no name-guessing table to keep in sync as roles change or new
+// custom roles get created.
+function archetypeFromRoles(roles: { name?: string; archetype?: string }[] | undefined): string {
+  const archetype = roles?.[0]?.archetype;
+  if (archetype === 'admin' || archetype === 'superadmin' || archetype === 'employee') {
+    return archetype;
+  }
+  return 'employee';
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,11 +32,9 @@ export async function GET(req: NextRequest) {
           { status: 401 }
         );
       }
-
-      // Get the mock user email from cookie (set during login)
+      // Per-role mock users: the email chosen at mock login (see mock-auth.ts).
       const userEmail = req.cookies.get('mockUserEmail')?.value;
       const mockUser = userEmail ? getMockUserByEmail(userEmail) : MOCK_USER;
-
       return NextResponse.json({
         success: true,
         data: {
@@ -35,9 +42,10 @@ export async function GET(req: NextRequest) {
           email: mockUser.email,
           firstName: mockUser.firstName,
           lastName: mockUser.lastName,
-          roles: mockUser.roles,
+          role: archetypeFromRoles(mockUser.roles),
           permissions: mockUser.permissions,
           scope: mockUser.scope,
+          mustChangePassword: false,
         },
       });
     }
@@ -64,11 +72,6 @@ export async function GET(req: NextRequest) {
     }
 
     const u = body.data;
-    // A role's archetype (employee/admin/superadmin) is what the UI renders
-    // as; custom roles such as "Payroll Admin" only carry it there.
-    const archetype = u.roles?.[0]?.archetype?.toLowerCase();
-    const backendRole = (u.roles?.[0]?.name || 'employee').toLowerCase();
-    const role = roleMapping[archetype] || roleMapping[backendRole] || 'employee';
 
     const resp = NextResponse.json({
       success: true,
@@ -77,13 +80,18 @@ export async function GET(req: NextRequest) {
         email: u.email,
         firstName: u.firstName,
         lastName: u.lastName,
-        role,
+        role: archetypeFromRoles(u.roles),
         permissions: u.permissions || [],
         // {kind:'org'} / {kind:'team', employeeIds} / {kind:'self'} - the one
-        // resolved scope value for this user's requests (see backend P2-04).
-        // Falls back to self, matching the backend's own fail-closed default,
-        // for callers against an older backend that doesn't send it yet.
+        // resolved scope value for this user's requests (see backend
+        // core/scope.py::resolve_management_scope). Falls back to self,
+        // matching the backend's own fail-closed default, for callers against
+        // an older backend that doesn't send it yet.
         scope: u.scope || { kind: 'self' },
+        // Forced temporary-password change gate (T06): an admin-issued
+        // password must be replaced before the user reaches the app.
+        // Defaults to false for older backends that don't send it yet.
+        mustChangePassword: u.mustChangePassword ?? false,
       },
     });
 

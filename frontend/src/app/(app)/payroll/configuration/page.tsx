@@ -480,7 +480,9 @@ function PayGroupsTab() {
                 {[['Legal entity', g.legal_entity_name], ['Employees', g.employee_count], ['Proration basis', g.proration_basis.replace(/_/g, ' ')],
                   ['Working days (default)', g.default_working_days], ['Mid-period revision', g.mid_period_revision_policy === 'split' ? 'Split period' : 'Next period'],
                   ['Missing attendance', g.attendance_policy === 'block' ? 'Blocks finalization' : 'Warning'], ['Variance threshold', `${num(g.variance_threshold_pct)}%`],
-                  ['Approval stages', (g.approval_stages?.length ? g.approval_stages : ['finance_review', 'final_approval']).map((s: string) => s.replace('_', ' ')).join(' → ')]].map(([k, v]) => (
+                  ['Approval stages', (g.approval_stages?.length ? g.approval_stages : ['finance_review', 'final_approval']).map((s: string) => s.replace('_', ' ')).join(' → ')],
+                  ['Finance Reviewer', meta?.approver_candidates?.finance_review?.find((u) => u.value === g.finance_reviewer)?.label ?? 'Automatic'],
+                  ['Final Approver', meta?.approver_candidates?.final_approval?.find((u) => u.value === g.final_approver)?.label ?? 'Automatic']].map(([k, v]) => (
                   <div key={k as string}><dt className="text-slate-500">{k}</dt><dd className="font-medium capitalize text-slate-900">{v}</dd></div>
                 ))}
               </dl>
@@ -504,6 +506,14 @@ function PayGroupsTab() {
             <Field label="Net pay rounding"><Select value={form.net_pay_rounding} onChange={(e) => set('net_pay_rounding', e.target.value)} options={meta?.rounding ?? []} /></Field>
             <Field label="Variance threshold %"><Input type="number" value={form.variance_threshold_pct ?? ''} onChange={(e) => set('variance_threshold_pct', e.target.value)} /></Field>
             <Field label="Large input threshold (₹)"><Input type="number" value={form.large_input_threshold ?? ''} onChange={(e) => set('large_input_threshold', e.target.value)} /></Field>
+            <Field label="Finance Reviewer" hint="Receives Finance Review requests in the Approvals inbox">
+              <Select value={form.finance_reviewer ?? ''} placeholder="Automatic (Finance Reviewer role)" onChange={(e) => set('finance_reviewer', e.target.value || null)}
+                options={meta?.approver_candidates?.finance_review ?? []} />
+            </Field>
+            <Field label="Final Approver" hint="Receives Final Approval requests in the Approvals inbox">
+              <Select value={form.final_approver ?? ''} placeholder="Automatic (Payroll Approver role)" onChange={(e) => set('final_approver', e.target.value || null)}
+                options={meta?.approver_candidates?.final_approval ?? []} />
+            </Field>
           </div>
           <Toggle checked={!!form.require_warning_acknowledgement} onChange={(v) => set('require_warning_acknowledgement', v)} label="Warnings must be acknowledged before submitting for approval" />
         </div>

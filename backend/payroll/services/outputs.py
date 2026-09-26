@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from payroll import models as m
 from payroll.engine.money import ZERO, money_str
+from payroll.integrations import notify
 
 from .common import audit, conflict, invalid
 
@@ -213,11 +214,14 @@ def release_payslips(run, actor):
         and not m.Payslip.objects.filter(result__run=run, status="released").exists()
     ):
         raise invalid("Generate payslips before releasing them.")
+    newly_released = list(slips.select_related("employee__user"))
     count = slips.update(status="released", released_by=actor, released_at=now)
     for slip in m.Payslip.objects.filter(result__run=run, status="released"):
         slip.payload = {**slip.payload, "ytd": ytd_for(slip.employee, run.period)}
         slip.save(update_fields=["payload"])
     audit(actor, "payslips.released", run, count=count)
+    period = run.period
+    notify.payslips_released(newly_released, f"{datetime.date(period.year, period.month, 1):%B %Y}")
     return count
 
 

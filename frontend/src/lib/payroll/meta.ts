@@ -19,6 +19,7 @@ export interface PayrollMeta {
   permissions: string[];
   employee_id: number | null;
   config_reader: boolean;
+  approver_candidates?: Record<'finance_review' | 'final_approval', { value: number; label: string }[]>;
 }
 
 export interface Option {

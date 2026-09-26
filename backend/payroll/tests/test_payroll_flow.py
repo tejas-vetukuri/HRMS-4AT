@@ -454,3 +454,65 @@ def test_dashboard_and_reports(admin, seeded):
         auditor.post(f"/api/v1/payroll/periods/{pid}/calculate/", {}, format="json").status_code
         == 403
     )
+
+
+def test_uat_011_net_pay_variance_is_flagged(admin, reviewer, seeded):
+    pid, nikhil = run_september(admin)
+    september = data(
+        admin.post(f"/api/v1/payroll/periods/{pid}/calculate/", {}, format="json"), 201
+    )
+    # Only the previous run's finalized status matters for the comparison.
+    m.PayrollRun.objects.filter(pk=september["id"]).update(status="finalized")
+    previous = m.EmployeePayrollResult.objects.get(run_id=september["id"], employee=nikhil)
+
+    group = m.PayGroup.objects.get(code="MONTHLY-IN")
+    october = data(
+        admin.post(
+            "/api/v1/payroll/periods/",
+            {"pay_group": str(group.pk), "year": 2026, "month": 10},
+            format="json",
+        ),
+        201,
+    )["id"]
+    data(
+        admin.post(f"/api/v1/payroll/periods/{october}/attendance/fill-missing/", {}, format="json")
+    )
+    bonus = data(
+        admin.post(
+            f"/api/v1/payroll/periods/{october}/inputs/",
+            {
+                "employee": nikhil.pk,
+                "input_type": "bonus",
+                "component": str(m.SalaryComponent.objects.get(code="BONUS").pk),
+                "amount": "40000",
+                "reason": "Festival bonus",
+            },
+            format="json",
+        ),
+        201,
+    )
+    data(
+        reviewer.post(
+            f"/api/v1/payroll/periods/{october}/inputs/{bonus['id']}/decide/",
+            {"decision": "approve"},
+            format="json",
+        )
+    )
+    run = data(admin.post(f"/api/v1/payroll/periods/{october}/calculate/", {}, format="json"), 201)
+
+    result = m.EmployeePayrollResult.objects.get(run_id=run["id"], employee=nikhil)
+    assert result.variance_amount == result.net_pay - previous.net_pay
+    assert result.variance_pct > group.variance_threshold_pct
+    flagged = [
+        e
+        for e in data(admin.get(f"/api/v1/payroll/runs/{run['id']}/exceptions/?severity=warning"))
+        if e["rule_code"] == "NET_PAY_VARIANCE"
+    ]
+    by_code = {e["employee"]["employee_code"]: e for e in flagged}
+    # Nikhil (bonus) and 4AT-006 (September joiner, full October) moved > 10%;
+    # an employee with identical pay both months is not flagged.
+    assert set(by_code) == {"4AT-002", "4AT-006"}
+    details = by_code["4AT-002"]["details"]
+    assert Decimal(details["previous"]) == previous.net_pay
+    assert Decimal(details["current"]) == result.net_pay
+    assert Decimal(details["pct"]) == result.variance_pct

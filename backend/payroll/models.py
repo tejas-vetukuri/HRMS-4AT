@@ -338,6 +338,14 @@ class PayGroup(TrackedModel):
         help_text='Ordered stages, e.g. ["finance_review", "final_approval"]',
     )
     require_warning_acknowledgement = models.BooleanField(default=True)
+    # Named approvers for the shared Approvals inbox (approvals engine). Blank:
+    # the first user holding the stage permission (other than the preparer).
+    finance_reviewer = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    final_approver = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -1163,6 +1171,10 @@ class PayrollApproval(models.Model):
     )
     comments = models.TextField(blank=True)
     acted_at = models.DateTimeField(null=True, blank=True)
+    # The shared-inbox request raised for this stage (approvals engine).
+    inbox_request = models.ForeignKey(
+        "approvals.Request", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

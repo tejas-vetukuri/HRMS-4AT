@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from payroll import models as m
+from payroll.integrations import approvals_bridge
 
 from . import config as config_service
 from .common import (
@@ -436,6 +437,7 @@ def submit_revision(revision, actor):
     revision.version += 1
     revision.save()
     audit(actor, "compensation_revision.submitted", revision)
+    approvals_bridge.open_next_stage(revision)
     return revision
 
 
@@ -444,7 +446,7 @@ def pending_stage(obj):
 
 
 @transaction.atomic
-def decide_revision(revision, actor, decision, comments, user_has_permission):
+def decide_revision(revision, actor, decision, comments, user_has_permission, from_inbox=False):
     if revision.status != "pending_approval":
         raise conflict("This revision is not awaiting approval.", code="PAY_INVALID_STATE")
     stage = pending_stage(revision)
@@ -463,10 +465,15 @@ def decide_revision(revision, actor, decision, comments, user_has_permission):
     stage.comments = comments or ""
     stage.acted_at = timezone.now()
     stage.save()
+    if not from_inbox:
+        approvals_bridge.close_stage(
+            stage, actor, "approve" if decision == "approve" else "reject", comments
+        )
     if decision == "approve":
         if pending_stage(revision) is None:
             apply_revision(revision, actor)
         audit(actor, f"compensation_revision.{stage.stage}.approved", revision, reason=comments)
+        approvals_bridge.open_next_stage(revision)
     else:
         revision.status = "rejected" if decision == "reject" else "returned"
         revision.decided_at = timezone.now()
@@ -539,6 +546,7 @@ def apply_revision(revision, actor):
 def cancel_revision(revision, actor, reason=""):
     if revision.status not in ("draft", "returned", "pending_approval"):
         raise conflict("Only an open revision can be cancelled.", code="PAY_INVALID_STATE")
+    approvals_bridge.cancel_open(revision, actor)
     revision.status = "cancelled"
     revision.approvals.filter(status="pending").update(status="cancelled")
     revision.version += 1

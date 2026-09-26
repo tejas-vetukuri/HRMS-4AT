@@ -11,6 +11,7 @@ from core.scope import user_effective_permissions
 from employees.models import Employee, LegalEntity
 from payroll import models as m
 from payroll import serializers as s
+from payroll.integrations import approvals_bridge
 from payroll.services import outputs as output_service
 from payroll.services import reports as report_service
 from payroll.services.common import audit, forbidden, invalid, not_found
@@ -242,5 +243,10 @@ class MetaViewSet(PayrollViewSet):
                 "employee_id": getattr(getattr(request.user, "employee", None), "pk", None),
                 "config_reader": any(c in codes for c in CONFIG_READERS),
                 "employee_count": Employee.objects.count(),
+                "approver_candidates": (
+                    approvals_bridge.approver_candidates()
+                    if any(c in codes for c in ("payroll.manage",))
+                    else {}
+                ),
             }
         )

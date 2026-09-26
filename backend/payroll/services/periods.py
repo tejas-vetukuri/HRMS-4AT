@@ -14,6 +14,7 @@ import json
 from decimal import Decimal, InvalidOperation
 from importlib import import_module
 
+from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -123,10 +124,15 @@ def population(period):
 
 
 def _attendance_provider():
+    """The attendance module's own provider if it ships one, else payroll's
+    adapter over the attendance / leave / org_calendar apps when installed."""
     try:
         return import_module("attendance.payroll_provider")
     except ImportError:
-        return None
+        pass
+    if all(apps.is_installed(app) for app in ("attendance", "leave", "org_calendar")):
+        return import_module("payroll.integrations.attendance_source")
+    return None
 
 
 def _full_days(period):
