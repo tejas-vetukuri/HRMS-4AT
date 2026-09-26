@@ -33,12 +33,19 @@ def resolve_employee_scope(user, permission_code: str) -> QuerySet:
     """Returns the queryset of Employee rows `user` may act on for
     `permission_code`, resolved from their role's RolePermission (or a
     UserPermissionOverride on that exact user+permission, which always wins)."""
-    employee = getattr(user, "employee", None)
-    if employee is None:
-        return Employee.objects.none()
-
     scope_tier, is_granted = _resolve_effective_scope(user, permission_code)
     if not is_granted or scope_tier is None:
+        return Employee.objects.none()
+
+    # An ALL-tier grant covers every employee and never depends on the caller's
+    # own record — an org-wide admin (e.g. the seeded superadmin) legitimately
+    # has no Employee row of their own. Only the caller-relative tiers below
+    # (self/manager/team/department/location/legal_entity) need one.
+    if scope_tier == ScopeTier.ALL:
+        return Employee.objects.all()
+
+    employee = getattr(user, "employee", None)
+    if employee is None:
         return Employee.objects.none()
 
     return _employees_for_tier(employee, scope_tier)
@@ -148,15 +155,17 @@ def resolve_management_scope(user, permission_code: str = "employees.read") -> d
     3-way distinction (see useRequireAccess's requireOrgScope), so our 7 tiers
     collapse: SELF -> self, ALL -> org, everything in between -> team with the
     actual resolved employee ids attached."""
-    employee = getattr(user, "employee", None)
-    if employee is None:
-        return {"kind": "self"}
-
     scope_tier, is_granted = _resolve_effective_scope(user, permission_code)
     if not is_granted or scope_tier is None or scope_tier == ScopeTier.SELF:
         return {"kind": "self"}
+    # ALL is org-wide and independent of the caller's own record (an org-wide
+    # admin need not be an employee); resolve it before requiring one.
     if scope_tier == ScopeTier.ALL:
         return {"kind": "org"}
+
+    employee = getattr(user, "employee", None)
+    if employee is None:
+        return {"kind": "self"}
 
     ids = _employees_for_tier(employee, scope_tier).values_list("pk", flat=True)
     return {"kind": "team", "employeeIds": [str(pk) for pk in ids]}

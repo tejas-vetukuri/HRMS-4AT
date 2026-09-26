@@ -277,3 +277,19 @@ def test_team_scope_terminates_on_a_longer_manager_cycle():
 
     assert _ids(result) == {a.pk, b.pk, c.pk}
     assert outside_cycle.pk not in _ids(result)
+
+
+def test_all_tier_without_own_employee_record_sees_everyone():
+    """An org-wide (ALL tier) grant covers every employee and must not depend on
+    the caller having an Employee row of their own — the seeded superadmin has
+    none. Regression: resolve_employee_scope used to return an empty queryset
+    for such a user, blanking the employee directory for admins."""
+    permission = PermissionFactory(code="employees.read")
+    role = RoleFactory()
+    RolePermissionFactory(role=role, permission=permission, scope_tier=ScopeTier.ALL)
+    admin = UserFactory(role=role)  # no EmployeeFactory — admin is not an employee
+    others = [EmployeeFactory() for _ in range(3)]
+
+    result = resolve_employee_scope(admin, permission.code)
+
+    assert _ids(result) == {e.pk for e in others}
